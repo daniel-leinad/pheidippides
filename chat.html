@@ -29,8 +29,8 @@
   function chatWith(id) {
     if (id != current_chat_id) {
       history.pushState({},"","\\chat\\" + id);
-      updateCurrentChat();
-    }
+    };
+    updateCurrentChat();
   }
 
   async function updateMessages() {
