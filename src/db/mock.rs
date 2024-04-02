@@ -36,12 +36,18 @@ pub struct Db {
 
 impl Db {
     pub fn new() -> Self {
-        let users = Arc::new(vec![
+        let mut users_vec = vec![
             ("1".into(), "Dan".into()),
             ("2".into(), "Man".into()),
             ("3".into(), "John".into()),
-        ]);
-        let messages = Arc::new(Mutex::new(vec![
+            ("4".into(), "Разговорчивый".into()),
+        ];
+
+        for i in 5..100 {
+            users_vec.push((format!("{i}"), format!("User {i}")))
+        };
+
+        let mut messages_vec = vec![
             MessageRecord{ from: "1".into(), to: "1".into(), message: "Привет!".into() },
             MessageRecord{ from: "1".into(), to: "1".into(), message: "Ой, я написал самому себе...".into() },
             MessageRecord{ from: "2".into(), to: "1".into(), message: "Hey".into() },
@@ -50,7 +56,18 @@ impl Db {
             MessageRecord{ from: "1".into(), to: "2".into(), message: "Right... 😂😂😂".into() },
             MessageRecord{ from: "1".into(), to: "3".into(), message: "Hey, John, like your new song!".into() },
             MessageRecord{ from: "3".into(), to: "1".into(), message: "Thanks, it's very popular, can you imagine that?".into() },
-        ]));
+        ];
+
+        for i in 0..100 {
+            messages_vec.push(MessageRecord { from: "4".into(), to: "1".into(), message: format!("Привет! ({i})") })
+        };
+
+        for (user_id, _) in users_vec.iter().skip(4) {
+            messages_vec.push(MessageRecord { from: user_id.clone(), to: "1".into(), message: "Привет".into() })
+        };
+
+        let users = Arc::new(users_vec);
+        let messages = Arc::new(Mutex::new(messages_vec));
         Db { users, messages }
     }
 }

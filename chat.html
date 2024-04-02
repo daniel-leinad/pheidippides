@@ -38,7 +38,11 @@
       method: "GET"
     });
     let response_body = await response.text();
-    document.getElementById("messages").innerHTML = response_body;
+
+    let messages = document.getElementById("messages");
+
+    messages.innerHTML = response_body;
+    messages.scrollTo(0, messages.scrollHeight);
   }
 
   addEventListener("load", function(e) {
