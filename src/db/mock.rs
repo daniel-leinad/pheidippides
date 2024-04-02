@@ -72,9 +72,9 @@ impl DbAccess for Db {
         };
         let res = self.messages.lock()?.iter().filter_map(|msg_record| {
             if &msg_record.from == user_id {
-                Some(ChatInfo::new(users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone(), msg_record.to.clone()))
+                Some(ChatInfo::new(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else if &msg_record.to == user_id {
-                Some(ChatInfo::new(users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone(), msg_record.from.clone()))
+                Some(ChatInfo::new(msg_record.from.clone(), users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else {
                 None
             }

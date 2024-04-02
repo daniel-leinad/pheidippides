@@ -28,6 +28,18 @@ pub trait DbAccess: Clone {
             .next();
         Ok(res)
     }
+
+    fn find_chats(&self, query: &str) -> Result<Vec<ChatInfo>, Self::Error> {
+        let query = query.to_lowercase();
+        let res = self.users()?.into_iter().filter_map(|(user_id, username)| {
+            if username.to_lowercase().contains(&query) {
+                Some(ChatInfo::new(user_id, username))
+            } else {
+                None
+            }
+        }).collect();
+        Ok(res)
+    }
 }
 
 pub type UserId = String;
@@ -39,7 +51,7 @@ pub struct ChatInfo {
 }
 
 impl ChatInfo {
-    fn new(username: String, id: UserId) -> Self {
+    fn new(id: UserId, username: String) -> Self {
         ChatInfo {username, id}
     }
 }

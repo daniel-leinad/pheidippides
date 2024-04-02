@@ -95,7 +95,7 @@ fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Result<
         None => (url, ""),
     };
 
-    let (_params, _anchor) = match params_anchor.split_once('#') {
+    let (params, _anchor) = match params_anchor.split_once('#') {
         Some(res) => res,
         None => (params_anchor, ""),
     };
@@ -123,6 +123,8 @@ fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Result<
         (Get, Some("chat"), chat_id, None, ..) => chat_page(&request, db_access, chat_id.map(|s| s.to_owned())),
         (Post, Some("message"), Some(receiver), None, ..) => send_message(&mut request, db_access, &receiver.to_owned()),
         (Get, Some("html"), Some("messages"), Some(chat_id), None, ..) => messages_html_response(&request, db_access, &chat_id.to_owned()),
+        (Get, Some("html"), Some("chats"), None, ..) => chats_html_response(&request, db_access),
+        (Get, Some("html"), Some("chatsearch"), None, ..) => chatsearch_html(db_access, params),
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
         _ => Ok(Response::BadRequest),
     };
@@ -164,15 +166,10 @@ fn chat_page(
     let chat_page_template =
         String::from_utf8(chat_page_template).context("Invalid utf-8 in chat.html")?;
 
-    let chats_html: String = db_access
-        .chats(&user_id)?
-        .iter()
-        .map(|chat_info| HtmlString::from(chat_info).0)
-        .intersperse(String::from("\n"))
-        .collect();
+    let chats_html: String = chats_html(&db_access, &user_id)?;
 
     let messages_html: String = match &chat_id {
-        Some(other_user_id) => messages_html(db_access, user_id, other_user_id)?,
+        Some(other_user_id) => messages_html(&db_access, &user_id, other_user_id)?,
         None => String::new(),
     };
 
@@ -192,17 +189,37 @@ fn messages_html_response(request: &Request, db_access: impl db::DbAccess, other
     let headers = get_headers_hashmap(request);
     let authorization = get_authorization(headers)?;
     let response_string = match authorization {
-        Some(user_id) => messages_html(db_access, user_id, other_user_id)?,
+        Some(user_id) => messages_html(&db_access, &user_id, other_user_id)?,
         None => String::from("Unauthorized"),
     };
     Ok(Response::String(response_string))
 }
 
-fn messages_html(db_access: impl db::DbAccess, user_id: String, other_user_id: &String) -> Result<String> {
+fn messages_html(db_access: &impl db::DbAccess, user_id: &UserId, other_user_id: &UserId) -> Result<String> {
     let res = db_access
-        .messages(&user_id, other_user_id)?
+        .messages(user_id, other_user_id)?
         .iter()
         .map(|msg| HtmlString::from(msg).0)
+        .intersperse(String::from("\n"))
+        .collect();
+    Ok(res)
+}
+
+fn chats_html_response(request: &Request, db_access: impl db::DbAccess) -> Result<Response> {
+    let headers = get_headers_hashmap(request);
+    let authorization = get_authorization(headers)?;
+    let response_string = match authorization {
+        Some(user_id) => chats_html(&db_access, &user_id)?,
+        None => String::from("Unauthorized"),
+    };
+    Ok(Response::String(response_string))
+}
+
+fn chats_html(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String> {
+    let res: String = db_access
+        .chats(user_id)?
+        .iter()
+        .map(|chat_info| HtmlString::from(chat_info).0)
         .intersperse(String::from("\n"))
         .collect();
     Ok(res)
@@ -318,6 +335,29 @@ fn failed_login_response() -> Result<Response> {
         bytes,
         headers: Vec::new(),
     })
+}
+
+#[derive(Deserialize)]
+struct ChatSearchParams {
+    query: String,
+}
+
+fn chatsearch_html(db_access: impl db::DbAccess, params: &str) -> Result<Response> {
+
+    let search_params: ChatSearchParams = match serde_query_string_params::from_str(params) {
+        Ok(res) => res,
+        Err(_) => return Ok(Response::Empty),
+    };
+
+    let chats_html: String = db_access
+        .find_chats(&search_params.query)?
+        .into_iter()
+        .map(|chat_info| HtmlString::from(&chat_info).0)
+        .intersperse("\n".to_owned())
+        .collect();
+
+    Ok(Response::String(chats_html))
+
 }
 
 fn generate_session_id() -> SessionId {
