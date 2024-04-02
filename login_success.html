@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Авторизован</title>
+  </head>
+  <body>
+    <p>Успех</p>
+    <p>Страница автоматически перенаправится</p>
+  </body>
+
+  <script>
+    setTimeout(redirect, 500);
+
+
+    function redirect() {
+      console.log("Redirecting...");
+      window.location.href = "/";
+    }
+  </script>
+</html>

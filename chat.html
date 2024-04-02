@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Hello!</title>
+</head>
+<script>
+  var current_chat_id = null;
+  function updateCurrentChat() {
+    if (current_chat_id) {
+      document.getElementById("chat_" + current_chat_id).setAttribute("class", "chat");
+    };
+    current_chat_id = location.pathname.replace("/chat/", "").replace("/chat", "");
+    if (current_chat_id) {
+      document.getElementById("chat_" + current_chat_id).setAttribute("class", "currentChat");
+      updateMessages();
+    } else {
+      document.getElementById("messages").innerHTML = "";
+    };
+  }
+
+  function chatWith(id) {
+    if (id != current_chat_id) {
+      history.pushState({},"","\\chat\\" + id);
+      updateCurrentChat();
+    }
+  }
+
+  async function updateMessages() {
+    let response = await fetch("/html/messages/" + current_chat_id, {
+      method: "GET"
+    });
+    let response_body = await response.text();
+    document.getElementById("messages").innerHTML = response_body;
+  }
+
+  addEventListener("load", function(e) {
+    updateCurrentChat();
+
+    document.getElementById("send_button").onclick = async function() {
+      if (!document.getElementById("replyForm").reportValidity()) {
+        return;
+      }
+
+      await fetch("/message/" + current_chat_id, {
+        method: "POST",
+        body: JSON.stringify({
+          message: document.getElementById("message_box").value
+        })
+      });
+
+      updateMessages();
+    };
+  });
+
+  addEventListener("popstate", function(e) {
+    updateCurrentChat();
+  })
+</script>
+<style>
+  div.chat_container {
+    display: flex;
+  }
+
+  div.leftColumn {
+    width: 15%;
+  }
+
+  div.chat {
+    user-select: none;
+    cursor: pointer;
+  }
+
+  div.currentChat {
+    border: solid;
+    border-color: gray;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  div.rightColumn {
+    width: 50%;
+    height: 100%;
+  }
+
+  div.rightColumn div {
+    display: block;
+    width: 100%;
+  }
+
+  div.replyBox {
+    text-align: right;
+  }
+
+  div.replyBox input {
+    display: inline;
+  }
+
+  div.messageIn {
+    text-align: left;
+  }
+
+  div.messageOut {
+    text-align: right;
+  }
+
+  div.chat:hover {
+    background-color: beige;
+  }
+
+  div.currentChat:hover {
+    background-color: beige;
+  }
+
+  div.messageIn:hover {
+    background-color: beige;
+  }
+
+  div.messageOut:hover {
+    background-color: beige;
+  }
+</style>
+
+<body>
+  <p>Привет, {username} <a href="/logout">выйти</a></p>
+  <div class="chat_container">
+    <div class="leftColumn">
+      <div class="chats">
+        {chats}
+      </div>
+    </div>
+    <div class="rightColumn">
+      <div class="messages" id="messages">
+        {messages}
+      </div>
+      <div class="replyBox" id="replyBox">
+        <form id="replyForm" action="javascript:void(0);">
+          <input type="text" name="message" style="width: 75%;" id="message_box" required/>
+          <button id="send_button">Отправить</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
