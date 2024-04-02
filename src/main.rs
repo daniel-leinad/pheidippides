@@ -301,10 +301,6 @@ struct SendMessageParams {
 
 fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &UserId) -> Result<Response> {
 
-    use chrono::Local;
-
-    eprintln!("{} post message", Local::now());
-
     let headers = get_headers_hashmap(request);
     let authorization = get_authorization(headers)?;
 
