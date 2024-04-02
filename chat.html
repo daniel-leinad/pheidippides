@@ -44,7 +44,7 @@
   addEventListener("load", function(e) {
     updateCurrentChat();
 
-    document.getElementById("send_button").onclick = async function() {
+    document.getElementById("send_button").addEventListener("click", async function() {
       if (!document.getElementById("replyForm").reportValidity()) {
         return;
       }
@@ -59,26 +59,22 @@
       document.getElementById("message_box").value = "";
 
       updateMessages();
-    };
+    });
 
-    document.getElementById("chatSearchButton").onclick = async function() {
+    document.getElementById("chatSearchButton").addEventListener("click", async function() {
       let query = document.getElementById("chatSearchBox").value;
       let chats = document.getElementById("chats");
       
       if (query) {
         let queryParams = new FormData();
         queryParams.set("query", query);
-        let response = await fetch("/html/chatsearch?" + new URLSearchParams(queryParams).toString(), {
-          method: "GET"
-        });
+        let response = await fetch("/html/chatsearch?" + new URLSearchParams(queryParams).toString(), {method: "GET"});
         chats.innerHTML = await response.text();
       } else {
-        let response = await fetch("/html/chats", {
-          method: "GET"
-        });
+        let response = await fetch("/html/chats", {method: "GET"});
         chats.innerHTML = await response.text();
       }
-    };
+    });
   });
 
   addEventListener("popstate", function(e) {
