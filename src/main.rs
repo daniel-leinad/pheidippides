@@ -21,7 +21,8 @@ struct Args {
     port: u8,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
     let host = args.host;
     let port = args.port;
@@ -29,11 +30,33 @@ fn main() -> Result<()> {
 
     let db_access = db::mock::Db::new();
 
-    let request_handler = |request| {
-        routing::handle_request(request, db_access.clone())
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    eprintln!("Started a server at {addr}");
+
+
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let db_access = db_access.clone();
+        tokio::spawn(async move {
+            let mut request = match http::Request::try_from_stream(stream).await {
+                Ok(req) => req,
+                Err(e) => {
+                    utils::log_internal_error(e);
+                    return;
+                },
+            };
+        
+            let response = match routing::handle_request(&mut request, db_access).await {
+                Ok(response) => response,
+                Err(e) => {
+                    utils::log_internal_error(e);
+                    return
+                }, 
+            };
+        
+            if let Err(e) = request.respond(response).await {
+                utils::log_internal_error(e)
+            };
+        });
     };
-
-    http::run_server(&addr, request_handler)
 }
-
-

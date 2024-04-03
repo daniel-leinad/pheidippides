@@ -3,7 +3,6 @@ use crate::serde_form_data;
 use super::db::{self, UserId};
 use crate::http::{Request, Response};
 use serde::Deserialize;
-use crate::utils::get_headers_hashmap;
 use super::get_authorization;
 
 struct HtmlString(String);
@@ -19,7 +18,7 @@ impl From<&db::ChatInfo> for HtmlString {
 }
 
 pub fn chats_html_response(request: &Request, db_access: impl db::DbAccess) -> Result<Response> {
-    let headers = get_headers_hashmap(request);
+    let headers = request.headers();
     let authorization = get_authorization(headers)?;
     let response_string = match authorization {
         Some(user_id) => chats_html(&db_access, &user_id)?,
