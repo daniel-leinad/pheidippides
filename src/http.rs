@@ -40,14 +40,17 @@ impl Request {
                 http_response
             },
             Response::Text(s) => tiny_http::Response::from_string(s),
-            Response::Redirect(ref url) => {
-                let location_header = match Header::from_bytes("Location", url.as_bytes()) {
+            Response::Redirect{ref location, headers} => {
+                let location_header = match Header::from_bytes("Location", location.as_bytes()) {
                     Ok(header) => header,
-                    Err(()) => bail!("Couldn't create Location header form url {url}"),
+                    Err(()) => bail!("Couldn't create Location header form url {location}"),
                 };
-                tiny_http::Response::from_string("Redirecting...")
+                
+                let mut http_response = tiny_http::Response::from_string("Redirecting...")
                     .with_status_code(303)
-                    .with_header(location_header)
+                    .with_header(location_header);
+                headers.into_iter().for_each(|header| http_response.add_header(header));
+                http_response
             },
             Response::BadRequest => tiny_http::Response::from_string("Bad request").with_status_code(400),
             Response::InternalServerError => tiny_http::Response::from_string("500 Internal Server Error").with_status_code(500),
@@ -68,7 +71,10 @@ pub enum Response {
         headers: Vec<Header>,
     },
     Text(String),
-    Redirect(String),
+    Redirect{
+        location: String, 
+        headers: Vec<Header>
+    },
     BadRequest,
     InternalServerError,
     Empty,

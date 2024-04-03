@@ -143,8 +143,8 @@ fn main_page(request: &Request) -> Result<Response> {
     let headers = get_headers_hashmap(request);
 
     match get_authorization(headers)? {
-        Some(_) => Ok(Response::Redirect("/chat".into())),
-        None => Ok(Response::Redirect("/login".into())),
+        Some(_) => Ok(Response::Redirect{location: "/chat".into(), headers: Vec::new()}),
+        None => Ok(unauthorized_redirect()),
     }
 }
 
@@ -157,7 +157,7 @@ fn chat_page(
 
     let user_id = match get_authorization(headers)? {
         Some(user_id) => user_id,
-        None => return Ok(Response::Redirect("/login".into())),
+        None => return Ok(unauthorized_redirect()),
     };
 
     let username = db_access
@@ -235,6 +235,7 @@ struct MessagesParams {
 }
 
 fn messages_json(request: &Request, db_access: impl db::DbAccess, chat_id: &str, params: &str) -> Result<Response> {
+
     let query_params: MessagesParams = match serde_query_string_params::from_str(params) {
         Ok(res) => res,
         Err(_) => return Ok(Response::BadRequest),
@@ -243,7 +244,7 @@ fn messages_json(request: &Request, db_access: impl db::DbAccess, chat_id: &str,
     let headers = get_headers_hashmap(request);
     let user_id = match get_authorization(headers)? {
         Some(res) => res,
-        None => return Ok(Response::Redirect("/login".into())),
+        None => return Ok(unauthorized_redirect()),
     };
 
     let messages: Vec<_> = db_access
@@ -274,16 +275,16 @@ fn logout(request: &Request) -> Result<Response> {
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
         //TODO handle error?
-        Err(_) => return Ok(Response::Redirect("/login".into())),
+        Err(_) => return Ok(unauthorized_redirect()),
     };
 
     let session_id = match cookies.get(SESSION_ID_COOKIE) {
         Some(session_id) => session_id,
-        None => return Ok(Response::Redirect("/login".into())),
+        None => return Ok(unauthorized_redirect()),
     };
 
     remove_session_info(&session_id)?;
-    Ok(Response::Redirect("/login".into()))
+    Ok(unauthorized_redirect())
 }
 
 #[derive(Deserialize)]
@@ -312,14 +313,10 @@ fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> Result<
     if authorization::validate_user_info(&user_id, &authorization_params.password) {
         let session_id = generate_session_id();
         update_session_info(session_id.clone(), SessionInfo { user_id })?;
-        let mut bytes = Vec::new();
-        File::open("login_success.html")
-            .context("Couldn't open file login_success.html")?
-            .read_to_end(&mut bytes)
-            .context("Couldn't read file login_success.html")?;
+        let location = "/chat".into();
         let headers = vec![header_set_cookie(SESSION_ID_COOKIE, &session_id)?];
 
-        Ok(Response::HtmlPage { bytes, headers })
+        Ok(Response::Redirect { location , headers })
     } else {
         failed_login_response()
     }
@@ -337,7 +334,7 @@ fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &
 
     let user_id = match authorization {
         Some(user_id) => user_id,
-        None => return Ok(Response::Redirect("/login".into())),
+        None => return Ok(unauthorized_redirect()),
     };
 
     let params: SendMessageParams = match serde_json::from_str(&request.content()?) {
@@ -362,6 +359,10 @@ fn failed_login_response() -> Result<Response> {
         bytes,
         headers: Vec::new(),
     })
+}
+
+fn unauthorized_redirect() -> Response {
+    Response::Redirect{location: "/login".into(), headers: Vec::new()}
 }
 
 #[derive(Deserialize)]
