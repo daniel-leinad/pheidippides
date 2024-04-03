@@ -35,5 +35,3 @@ fn main() -> Result<()> {
 
     http::run_server(&addr, request_handler)
 }
-
-
