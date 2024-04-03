@@ -8,17 +8,6 @@ use super::get_authorization;
 
 struct HtmlString(String);
 
-impl From<&db::Message> for HtmlString {
-    fn from(value: &db::Message) -> Self {
-        let class = match value.message_type {
-            db::MessageType::In => "messageIn",
-            db::MessageType::Out => "messageOut",
-        };
-        let msg = &value.message;
-        HtmlString(format!("<div class=\"{class}\">{msg}</div>"))
-    }
-}
-
 impl From<&db::ChatInfo> for HtmlString {
     fn from(value: &db::ChatInfo) -> Self {
         let id = &value.id;
@@ -27,27 +16,6 @@ impl From<&db::ChatInfo> for HtmlString {
             "<div class=\"chat\" id=\"chat_{id}\" onclick=\"chatWith({id})\">{username}</div>"
         ))
     }
-}
-
-pub fn messages_html_response(request: &Request, db_access: impl db::DbAccess, other_user_id: &String) -> Result<Response> {
-    let headers = get_headers_hashmap(request);
-    let authorization = get_authorization(headers)?;
-    let response_string = match authorization {
-        Some(user_id) => messages_html(&db_access, &user_id, other_user_id)?,
-        None => String::from("Unauthorized"),
-    };
-    Ok(Response::Text(response_string))
-}
-
-pub fn messages_html(db_access: &impl db::DbAccess, user_id: &UserId, other_user_id: &UserId) -> Result<String> {
-    let res = db_access
-        .last_messages(user_id, other_user_id, None)?
-        .iter()
-        .rev()
-        .map(|msg| HtmlString::from(msg).0)
-        .intersperse(String::from("\n"))
-        .collect();
-    Ok(res)
 }
 
 pub fn chats_html_response(request: &Request, db_access: impl db::DbAccess) -> Result<Response> {

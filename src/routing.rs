@@ -49,7 +49,6 @@ pub fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Res
         (Post, Some("authorize"), None, ..) => authorization(&mut request, db_access),
         (Get, Some("chat"), chat_id, None, ..) => chat_page(&request, db_access, chat_id.map(|s| s.to_owned())),
         (Post, Some("message"), Some(receiver), None, ..) => send_message(&mut request, db_access, &receiver.to_owned()),
-        (Get, Some("html"), Some("messages"), Some(chat_id), None, ..) => html::messages_html_response(&request, db_access, &chat_id.to_owned()),
         (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(&request, db_access),
         (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(db_access, params),
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(&request, db_access, chat_id, params),
@@ -96,15 +95,9 @@ fn chat_page(
 
     let chats_html: String = html::chats_html(&db_access, &user_id)?;
 
-    let messages_html: String = match &chat_id {
-        Some(other_user_id) => html::messages_html(&db_access, &user_id, other_user_id)?,
-        None => String::new(),
-    };
-
     let chat_page = chat_page_template
         .replace("{username}", &username)
         .replace("{chats}", &chats_html)
-        .replace("{messages}", &messages_html)
         .replace("{chat_id}", &chat_id.unwrap_or_default());
 
     Ok(Response::HtmlPage {
