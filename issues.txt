@@ -1,2 +1,3 @@
 - Message buffer doesn't clear on the client, might lead to space leak
 - Unnecessary http requests from client, e.g when you return to a chat that was previously determined to be completely loaded
+- When session id expires, switching between chats does nothing (with errors in console)
