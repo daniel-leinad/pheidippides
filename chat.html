@@ -6,6 +6,9 @@
   <title>Hello!</title>
 </head>
 <script>
+  var messagesBuffer = [];
+  var noMoreOldMessages = false;
+
   var current_chat_id = null;
   function updateCurrentChat() {
     if (current_chat_id) {
@@ -19,7 +22,7 @@
     if (current_chat_id) {
       // must exist
       document.getElementById("chat_" + current_chat_id).setAttribute("class", "currentChat");
-      updateMessages();
+      loadMessages();
     } else {
       document.getElementById("messages").innerHTML = "";
     };
@@ -28,27 +31,103 @@
 
   function chatWith(id) {
     if (id != current_chat_id) {
-      history.pushState({},"","\\chat\\" + id);
+      history.pushState({}, "", "\\chat\\" + id);
     };
     updateCurrentChat();
   }
 
-  async function updateMessages() {
-    let response = await fetch("/html/messages/" + current_chat_id, {
+  /*
+  Load messages for a new chat (e.g after changing current chat)
+  clears messagesBuffer
+  */
+  async function loadMessages() {
+    let response = await fetch("/json/messages/" + current_chat_id, {
       method: "GET"
     });
-    let response_body = await response.text();
+    messagesBuffer = await response.json();
+    noMoreOldMessages = false;
+
+    redrawMessages(false);
 
     let messages = document.getElementById("messages");
-
-    messages.innerHTML = response_body;
-    messages.scrollTo(0, messages.scrollHeight);
   }
 
-  addEventListener("load", function(e) {
+  /*
+  Load old messages for the current chat
+  extends messagesBuffer
+  */
+  async function loadMoreOldMessages() {
+    if (noMoreOldMessages) {
+      return;
+    };
+
+    let url = "";
+
+    if (messagesBuffer.length == 0) {
+      url = "/json/messages/" + current_chat_id;
+    } else {
+      let firstMessageId = messagesBuffer[0].id;
+      url = "/json/messages/" + current_chat_id + "?from=" + firstMessageId
+    }
+
+    let response = await fetch(url, {method: "GET"});
+
+    response_body = await response.json();
+    if (response_body.length) {
+      messagesBuffer = [...response_body, ...messagesBuffer];
+    } else {
+      noMoreOldMessages = true;
+    }
+
+    redrawMessages(true);
+  }
+
+  function redrawMessages(saveScrollPosition) {
+    let messages = document.getElementById("messages");
+    let scrollFromBottom = 0;
+    if (saveScrollPosition) {
+      scrollFromBottom = messages.scrollHeight - messages.scrollTop;
+    };
+    messages.replaceChildren();
+
+    if (noMoreOldMessages) {
+      let el = document.createElement("div");
+      el.setAttribute("id", "noMoreOldMessages");
+      el.appendChild(document.createTextNode("Больше нет"));
+      messages.appendChild(el);
+    } else {
+      let el = document.createElement("div");
+      el.setAttribute("id", "loadMoreOldMessages");
+      el.appendChild(document.createTextNode("Загрузить еще"));
+      el.addEventListener("click", loadMoreOldMessages);
+      messages.appendChild(el);
+    };
+
+    for (msg of messagesBuffer) {
+      let el = document.createElement("div");
+      switch (msg.type) {
+        case "In":
+          el.setAttribute("class", "messageIn");
+          break;
+        case "Out":
+          el.setAttribute("class", "messageOut");
+          break;
+        default:
+          console.error("Unexpected message type: " + msg.type);
+      }
+      let messageText = document.createTextNode(msg.message);
+      el.appendChild(messageText);
+
+      messages.appendChild(el);
+    }
+
+    messages.scrollTo(0, messages.scrollHeight - scrollFromBottom);
+  }
+
+  addEventListener("load", function (e) {
     updateCurrentChat();
 
-    document.getElementById("send_button").addEventListener("click", async function() {
+    document.getElementById("send_button").addEventListener("click", async function () {
       if (!document.getElementById("replyForm").reportValidity()) {
         return;
       }
@@ -62,26 +141,32 @@
 
       document.getElementById("message_box").value = "";
 
-      updateMessages();
+      loadMessages();
     });
 
-    document.getElementById("chatSearchButton").addEventListener("click", async function() {
+    document.getElementById("chatSearchButton").addEventListener("click", async function () {
       let query = document.getElementById("chatSearchBox").value;
       let chats = document.getElementById("chats");
-      
+
       if (query) {
         let queryParams = new FormData();
         queryParams.set("query", query);
-        let response = await fetch("/html/chatsearch?" + new URLSearchParams(queryParams).toString(), {method: "GET"});
+        let response = await fetch("/html/chatsearch?" + new URLSearchParams(queryParams).toString(), { method: "GET" });
         chats.innerHTML = await response.text();
       } else {
-        let response = await fetch("/html/chats", {method: "GET"});
+        let response = await fetch("/html/chats", { method: "GET" });
         chats.innerHTML = await response.text();
       }
     });
+
+    document.getElementById("messages").addEventListener("scrollend", function (e) {
+      if (document.getElementById("messages").scrollTop === 0) {
+        loadMoreOldMessages();
+      }
+    })
   });
 
-  addEventListener("popstate", function(e) {
+  addEventListener("popstate", function (e) {
     updateCurrentChat();
   })
 </script>
@@ -176,19 +261,22 @@
     text-align: right;
   }
 
-  div.chat:hover {
+  #loadMoreOldMessages {
+    text-align: center;
+    cursor: pointer;
+    color: grey;
+  }
+
+  #noMoreOldMessages {
+    text-align: center;
+    user-select: none;
+  }
+
+  div.messages div:hover {
     background-color: beige;
   }
 
-  div.currentChat:hover {
-    background-color: beige;
-  }
-
-  div.messageIn:hover {
-    background-color: beige;
-  }
-
-  div.messageOut:hover {
+  div.chats div:hover {
     background-color: beige;
   }
 </style>
@@ -199,7 +287,7 @@
     <div class="leftColumn">
       <div class="chatSearch">
         <form name="chatSearchForm" action="javascript:void(0);">
-          <input type="text" name="chatSearchBox" id="chatSearchBox" style="width: 50%;"/>
+          <input type="text" name="chatSearchBox" id="chatSearchBox" style="width: 50%;" />
           <button name="chatSearchButton" id="chatSearchButton">Поиск</button>
         </form>
       </div>
@@ -213,7 +301,7 @@
       </div>
       <div class="replyBox" id="replyBox">
         <form id="replyForm" action="javascript:void(0);">
-          <input type="text" name="message" style="width: 75%;" id="message_box" required/>
+          <input type="text" name="message" style="width: 75%;" id="message_box" required />
           <button id="send_button">Отправить</button>
         </form>
       </div>

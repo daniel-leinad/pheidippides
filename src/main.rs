@@ -8,7 +8,7 @@ mod serde_query_string_params;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use db::UserId;
+use db::{MessageId, UserId};
 use http::{Header, Request, Response, Server};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -34,11 +34,12 @@ struct HtmlString(String);
 
 impl From<&db::Message> for HtmlString {
     fn from(value: &db::Message) -> Self {
-        use db::Message::*;
-        match value {
-            In(msg) => HtmlString(format!("<div class=\"messageIn\">{msg}</div>")),
-            Out(msg) => HtmlString(format!("<div class=\"messageOut\">{msg}</div>")),
-        }
+        let class = match value.message_type {
+            db::MessageType::In => "messageIn",
+            db::MessageType::Out => "messageOut",
+        };
+        let msg = &value.message;
+        HtmlString(format!("<div class=\"{class}\">{msg}</div>"))
     }
 }
 
@@ -125,6 +126,7 @@ fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Result<
         (Get, Some("html"), Some("messages"), Some(chat_id), None, ..) => messages_html_response(&request, db_access, &chat_id.to_owned()),
         (Get, Some("html"), Some("chats"), None, ..) => chats_html_response(&request, db_access),
         (Get, Some("html"), Some("chatsearch"), None, ..) => chatsearch_html(db_access, params),
+        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => messages_json(&request, db_access, chat_id, params),
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
         _ => Ok(Response::BadRequest),
     };
@@ -192,13 +194,14 @@ fn messages_html_response(request: &Request, db_access: impl db::DbAccess, other
         Some(user_id) => messages_html(&db_access, &user_id, other_user_id)?,
         None => String::from("Unauthorized"),
     };
-    Ok(Response::String(response_string))
+    Ok(Response::Text(response_string))
 }
 
 fn messages_html(db_access: &impl db::DbAccess, user_id: &UserId, other_user_id: &UserId) -> Result<String> {
     let res = db_access
-        .messages(user_id, other_user_id)?
+        .last_messages(user_id, other_user_id, None)?
         .iter()
+        .rev()
         .map(|msg| HtmlString::from(msg).0)
         .intersperse(String::from("\n"))
         .collect();
@@ -212,7 +215,7 @@ fn chats_html_response(request: &Request, db_access: impl db::DbAccess) -> Resul
         Some(user_id) => chats_html(&db_access, &user_id)?,
         None => String::from("Unauthorized"),
     };
-    Ok(Response::String(response_string))
+    Ok(Response::Text(response_string))
 }
 
 fn chats_html(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String> {
@@ -223,6 +226,34 @@ fn chats_html(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String>
         .intersperse(String::from("\n"))
         .collect();
     Ok(res)
+}
+
+//TODO bad name
+#[derive(Deserialize, Debug)]
+struct MessagesParams {
+    from: Option<MessageId>,
+}
+
+fn messages_json(request: &Request, db_access: impl db::DbAccess, chat_id: &str, params: &str) -> Result<Response> {
+    let query_params: MessagesParams = match serde_query_string_params::from_str(params) {
+        Ok(res) => res,
+        Err(_) => return Ok(Response::BadRequest),
+    };
+
+    let headers = get_headers_hashmap(request);
+    let user_id = match get_authorization(headers)? {
+        Some(res) => res,
+        None => return Ok(Response::Redirect("/login".into())),
+    };
+
+    let messages: Vec<_> = db_access
+        .last_messages(&user_id, &chat_id.to_owned(), query_params.from)?
+        .into_iter()
+        .rev()
+        .collect();
+    let json_messages = serde_json::json!(messages);
+    //TODO add special type json?
+    Ok(Response::Text(json_messages.to_string()))
 }
 
 fn authorization_page() -> Result<Response> {
@@ -352,7 +383,7 @@ fn chatsearch_html(db_access: impl db::DbAccess, params: &str) -> Result<Respons
         .intersperse("\n".to_owned())
         .collect();
 
-    Ok(Response::String(chats_html))
+    Ok(Response::Text(chats_html))
 
 }
 

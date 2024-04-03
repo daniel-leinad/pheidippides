@@ -39,7 +39,7 @@ impl Request {
                 headers.into_iter().for_each(|header| http_response.add_header(header));
                 http_response
             },
-            Response::String(s) => tiny_http::Response::from_string(s),
+            Response::Text(s) => tiny_http::Response::from_string(s),
             Response::Redirect(ref url) => {
                 let location_header = match Header::from_bytes("Location", url.as_bytes()) {
                     Ok(header) => header,
@@ -67,7 +67,7 @@ pub enum Response {
         bytes: Vec<u8>,
         headers: Vec<Header>,
     },
-    String(String),
+    Text(String),
     Redirect(String),
     BadRequest,
     InternalServerError,

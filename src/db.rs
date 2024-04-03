@@ -3,12 +3,17 @@ pub mod mock;
 use std::cmp::PartialEq;
 use std::hash::Hash;
 
+use serde::Serialize;
+
+pub type UserId = String;
+pub type MessageId = String;
+
 pub trait DbAccess: Clone {
     type Error: 'static + std::error::Error + Send + Sync;
 
     fn users(&self) -> Result<Vec<(UserId, String)>, Self::Error>;
     fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Self::Error>;
-    fn messages(&self, this: &UserId, other: &UserId)-> Result<Vec<Message>, Self::Error>;
+    fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error>;
     fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<(), Self::Error>;
     
     fn username(&self, user_id: &UserId) -> Result<Option<String>, Self::Error> {
@@ -42,8 +47,6 @@ pub trait DbAccess: Clone {
     }
 }
 
-pub type UserId = String;
-
 #[derive(PartialEq, Hash)]
 pub struct ChatInfo {
     pub username: String,
@@ -56,7 +59,16 @@ impl ChatInfo {
     }
 }
 
-pub enum Message {
-    In(String),
-    Out(String),
+#[derive(Serialize)]
+pub struct Message {
+    pub id: MessageId,
+    #[serde(rename(serialize = "type"))]
+    pub message_type: MessageType,
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub enum MessageType {
+    In,
+    Out,
 }
