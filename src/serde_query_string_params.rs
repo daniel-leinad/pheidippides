@@ -318,6 +318,12 @@ impl<'de> de::Deserializer<'de> for StringValue<'de> {
         visitor.visit_borrowed_str("")
     }
 
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de> {
+        visitor.visit_some(self)
+    }
+
     de_unsupported!(deserialize_str);
     de_unsupported!(deserialize_any);
     de_unsupported!(deserialize_bool);
@@ -334,7 +340,6 @@ impl<'de> de::Deserializer<'de> for StringValue<'de> {
     de_unsupported!(deserialize_char);
     de_unsupported!(deserialize_bytes);
     de_unsupported!(deserialize_byte_buf);
-    de_unsupported!(deserialize_option);
     de_unsupported!(deserialize_unit);
     de_unsupported!(deserialize_seq);
     de_unsupported!(deserialize_map);
