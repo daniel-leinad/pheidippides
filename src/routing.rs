@@ -6,12 +6,9 @@ use super::{sessions, serde_form_data, authorization};
 use super::db::{self, UserId};
 use super::http::{Request, Response};
 use serde::Deserialize;
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    io::Read,
-};
+use std::collections::HashMap;
 use super::utils::{log_internal_error, get_cookies_hashmap, get_headers_hashmap, header_set_cookie};
+use crate::fs;
 
 pub fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Result<()> {
 
@@ -89,9 +86,7 @@ fn chat_page(
         .username(&user_id)?
         .context("Couldn't retrieve username from user_id stored SESSION_INFO")?;
 
-    let chat_page_template = fs::read("chat.html").context("Couldn't open file chat.html")?;
-    let chat_page_template =
-        String::from_utf8(chat_page_template).context("Invalid utf-8 in chat.html")?;
+    let chat_page_template = fs::load_template_as_string("chat.html")?;
 
     let chats_html: String = html::chats_html(&db_access, &user_id)?;
 
@@ -107,12 +102,7 @@ fn chat_page(
 }
 
 fn authorization_page() -> Result<Response> {
-    let mut authorization_page_file =
-        File::open("login.html").context("Couldn't open file login.html")?;
-    let mut bytes = Vec::new();
-    authorization_page_file
-        .read_to_end(&mut bytes)
-        .context("Couldn't read file login.html")?;
+    let bytes = fs::load_template("login.html")?;
     return Ok(Response::HtmlPage {
         bytes,
         headers: Vec::new(),
@@ -200,10 +190,7 @@ fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &
 }
 
 fn failed_login_response() -> Result<Response> {
-    let mut bytes = Vec::new();
-    let mut file = File::open("login_fail.html").context("Could not open file login_fail.html")?;
-    file.read_to_end(&mut bytes)
-        .context("Couldn't read file login_fail.html")?;
+    let bytes = fs::load_template("login_fail.html")?;
     Ok(Response::HtmlPage {
         bytes,
         headers: Vec::new(),

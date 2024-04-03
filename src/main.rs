@@ -8,6 +8,7 @@ mod serde_form_data;
 mod utils;
 mod sessions;
 mod routing;
+mod fs;
 
 use anyhow::Result;
 use clap::Parser;
