@@ -1,11 +1,5 @@
 use anyhow::{bail, Result};
-use once_cell::sync::Lazy;
-use std::sync::RwLock;
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    io::Read,
-};
+use std::collections::HashMap;
 use super::http::{Request, Header};
 
 pub fn log_internal_error(error: impl std::fmt::Display) {

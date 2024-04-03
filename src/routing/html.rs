@@ -1,18 +1,10 @@
-use anyhow::{bail, Context, Result};
-use clap::Parser;
-use super::{sessions, serde_form_data, authorization};
-use super::db::{self, MessageId, UserId};
-use crate::http::{Header, Request, Response, Server};
-use once_cell::sync::Lazy;
+use anyhow::Result;
+use crate::serde_form_data;
+use super::db::{self, UserId};
+use crate::http::{Request, Response};
 use serde::Deserialize;
-use std::sync::RwLock;
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    io::Read,
-};
-use crate::utils::{log_internal_error, get_cookies_hashmap, get_headers_hashmap, header_set_cookie};
-use super::{get_authorization, unauthorized_redirect};
+use crate::utils::get_headers_hashmap;
+use super::get_authorization;
 
 struct HtmlString(String);
 

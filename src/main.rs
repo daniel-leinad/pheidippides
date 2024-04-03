@@ -9,19 +9,8 @@ mod utils;
 mod sessions;
 mod routing;
 
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use clap::Parser;
-use db::{MessageId, UserId};
-use http::{Header, Request, Response, Server};
-use once_cell::sync::Lazy;
-use serde::Deserialize;
-use std::sync::RwLock;
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    io::Read,
-};
-use utils::{log_internal_error, get_cookies_hashmap, get_headers_hashmap, header_set_cookie};
 
 #[derive(Parser, Debug)]
 struct Args {

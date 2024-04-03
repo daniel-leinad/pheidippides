@@ -1,14 +1,11 @@
 mod html;
 mod json;
 
-use anyhow::{bail, Context, Result};
-use clap::Parser;
+use anyhow::{Context, Result};
 use super::{sessions, serde_form_data, authorization};
-use super::db::{self, MessageId, UserId};
-use super::http::{Header, Request, Response, Server};
-use once_cell::sync::Lazy;
+use super::db::{self, UserId};
+use super::http::{Request, Response};
 use serde::Deserialize;
-use std::sync::RwLock;
 use std::{
     collections::HashMap,
     fs::{self, File},

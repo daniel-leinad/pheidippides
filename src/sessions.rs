@@ -1,11 +1,7 @@
 use anyhow::{bail, Result};
 use once_cell::sync::Lazy;
 use std::sync::RwLock;
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    io::Read,
-};
+use std::collections::HashMap;
 use super::db;
 
 pub type SessionId = String;
