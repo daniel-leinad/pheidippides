@@ -1,5 +1,6 @@
 pub use tiny_http::{Header, Server};
 use anyhow::{Result, Context, bail};
+use super::utils;
 
 pub struct Request {
     inner: tiny_http::Request,
@@ -78,4 +79,22 @@ pub enum Response {
     BadRequest,
     InternalServerError,
     Empty,
+}
+
+pub fn run_server(addr: &str, mut request_handler: impl FnMut(Request) -> Result<()>) -> Result<()> {
+    let http_server: Server = match Server::http(&addr) {
+        Ok(server) => {
+            eprintln!("Started a server at {addr}");
+            server
+        }
+        Err(_) => bail!("Couldn't start a server"),
+    };
+
+    for request in http_server.incoming_requests() {
+        if let Err(e) = request_handler(request.into()) {
+            utils::log_internal_error(e);
+        }
+    };
+
+    Ok(())
 }
