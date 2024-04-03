@@ -1,8 +1,10 @@
 use std::fs;
+use std::path::Path;
 use anyhow::{Context, Result};
 
 pub fn load_template(file_name: &str) -> Result<Vec<u8>> {
-    fs::read(file_name).with_context(|| format!("Couldn't load template file {file_name}"))
+    let path = Path::new("templates").join(file_name);
+    fs::read(path).with_context(|| format!("Couldn't load template file {file_name}"))
 }
 
 pub fn load_template_as_string(file_name: &str) -> Result<String> {
