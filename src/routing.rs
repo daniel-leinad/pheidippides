@@ -80,10 +80,10 @@ pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess)
     use http::Method::*;
     let response = match query {
         (Get, None, ..) => main_page(request),
-        (Get, Some("login"), None, ..) => authorization_page(),
+        (Get, Some("login"), None, ..) => authorization_page().await,
         (Get, Some("logout"), None, ..) => logout(request),
         (Post, Some("authorize"), None, ..) => authorization(request, db_access).await,
-        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, db_access, chat_id.map(|s| s.to_owned())),
+        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, db_access, chat_id.map(|s| s.to_owned())).await,
         (Post, Some("message"), Some(receiver), None, ..) => send_message(request, db_access, &receiver.to_owned()).await,
         (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, db_access),
         (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(db_access, params),
@@ -111,7 +111,7 @@ fn main_page(request: &Request) -> Result<Response> {
     }
 }
 
-fn chat_page(
+async fn chat_page(
     request: &Request,
     db_access: impl db::DbAccess,
     chat_id: Option<db::UserId>,
@@ -127,7 +127,7 @@ fn chat_page(
         .username(&user_id)?
         .context("Couldn't retrieve username from user_id stored SESSION_INFO")?;
 
-    let chat_page_template = fs::load_template_as_string("chat.html")?;
+    let chat_page_template = fs::load_template_as_string("chat.html").await?;
 
     let chats_html: String = html::chats_html(&db_access, &user_id)?;
 
@@ -142,8 +142,8 @@ fn chat_page(
     })
 }
 
-fn authorization_page() -> Result<Response> {
-    let content = fs::load_template_as_string("login.html")?;
+async fn authorization_page() -> Result<Response> {
+    let content = fs::load_template_as_string("login.html").await?;
     return Ok(Response::HtmlPage {
         content,
         headers: Vec::new(),
@@ -187,7 +187,7 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
 
     let user_id = match db_access.user_id(&authorization_params.login)? {
         Some(user_id) => user_id,
-        None => return failed_login_response(),
+        None => return failed_login_response().await,
     };
 
     if authorization::validate_user_info(&user_id, &authorization_params.password) {
@@ -198,7 +198,7 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
 
         Ok(Response::Redirect { location , headers })
     } else {
-        failed_login_response()
+        failed_login_response().await
     }
 }
 
@@ -230,8 +230,8 @@ async fn send_message(request: &mut Request, db_access: impl db::DbAccess, recei
     Ok(Response::HtmlPage { content: "ok.".to_owned(), headers: Vec::new() })
 }
 
-fn failed_login_response() -> Result<Response> {
-    let content = fs::load_template_as_string("login_fail.html")?;
+async fn failed_login_response() -> Result<Response> {
+    let content = fs::load_template_as_string("login_fail.html").await?;
     Ok(Response::HtmlPage {
         content,
         headers: Vec::new(),
