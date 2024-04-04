@@ -11,7 +11,45 @@ use std::collections::HashMap;
 use super::utils::{log_internal_error, get_cookies_hashmap, header_set_cookie};
 use crate::fs;
 
-pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response> {
+#[derive(Clone)]
+pub struct RequestHandler<D: db::DbAccess> {
+    db_access: D,
+}
+
+impl<D: db::DbAccess> RequestHandler<D> {
+    pub fn new(db_access: D) -> Self {
+        RequestHandler { db_access }
+    }
+}
+
+#[derive(Debug)]
+pub struct RequestHandlerError {
+    inner: anyhow::Error,
+}
+
+impl From<anyhow::Error> for RequestHandlerError {
+    fn from(inner: anyhow::Error) -> Self {
+        RequestHandlerError { inner }
+    }
+}
+
+impl std::fmt::Display for RequestHandlerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl std::error::Error for RequestHandlerError {}
+
+impl<D: db::DbAccess> http::RequestHandler for RequestHandler<D> {
+    type Error = RequestHandlerError;
+
+    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
+        handle_request(request, self.db_access)
+    }
+}
+
+pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {

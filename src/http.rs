@@ -5,7 +5,7 @@ use std::{collections::HashMap, str::FromStr};
 use anyhow::{Result, Context};
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream};
 
-use crate::utils::CaseInsensitiveString;
+use crate::utils::{self, CaseInsensitiveString};
 use http_response::{HttpResponseBuilder, HttpStatusCode};
 
 pub type Header = (CaseInsensitiveString, String);
@@ -176,43 +176,48 @@ pub enum Response {
     InternalServerError,
     Empty,
 }
-// pub async fn run_server<F>(addr: &str, mut request_handler: F) -> Result<()>
-// where
-//     F: Fn(&mut Request) -> Result<Response>,
-//     F: Sync + Clone + 'static,
-//  {
-//     let listener = tokio::net::TcpListener::bind(addr).await?;
-//     eprintln!("Started a server at {addr}");
 
-//     // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+pub trait RequestHandler: 'static + Send + Clone {
+    type Error: std::error::Error;
+    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send;
+}
 
-//     // let request_handler = Arc::new(Mutex::new(request_handler));
-//     loop {
-//         let (mut stream, _) = listener.accept().await?;
-//         tokio::spawn(proccess_stream(stream, &request_handler.clone())); 
-//     }
-// }
+pub async fn run_server(addr: &str, request_handler: impl RequestHandler) -> Result<()> {
 
-// async fn proccess_stream(stream: TcpStream, request_handler: &impl Fn(&mut Request) -> Result<Response>) {
-//     let mut request = match Request::try_from_stream(stream).await {
-//         Ok(req) => req,
-//         Err(e) => {
-//             log_internal_error(e);
-//             return;
-//         },
-//     };
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    eprintln!("Started a server at {addr}");
 
-//     // let request = Arc::new(Mutex::new(request));
+    loop {
+        let (stream, _) = match listener.accept().await {
+            Ok(res) => res,
+            Err(e) => {
+                utils::log_internal_error(e);
+                continue;
+            },
+        };
 
-//     let response = match request_handler(&mut request) {
-//         Ok(response) => response,
-//         Err(e) => {
-//             log_internal_error(e);
-//             return
-//         }, 
-//     };
-
-//     if let Err(e) = request.respond(response).await {
-//         log_internal_error(e)
-//     };
-// }
+        let request_handler = request_handler.clone();
+        
+        tokio::spawn(async move {
+            let mut request = match Request::try_from_stream(stream).await {
+                Ok(req) => req,
+                Err(e) => {
+                    utils::log_internal_error(e);
+                    return;
+                },
+            };
+        
+            let response = match request_handler.handle(&mut request).await {
+                Ok(response) => response,
+                Err(e) => {
+                    utils::log_internal_error(e);
+                    return
+                }, 
+            };
+        
+            if let Err(e) = request.respond(response).await {
+                utils::log_internal_error(e)
+            };
+        });
+    };
+}

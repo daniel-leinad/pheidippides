@@ -10,7 +10,7 @@ mod sessions;
 mod routing;
 mod fs;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -30,33 +30,9 @@ async fn main() -> Result<()> {
 
     let db_access = db::mock::Db::new();
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    eprintln!("Started a server at {addr}");
+    let request_handler = routing::RequestHandler::new(db_access);
 
+    http::run_server(&addr, request_handler).await.with_context(|| format!("Unable to start server at {addr}"))?;
 
-    loop {
-        let (stream, _) = listener.accept().await?;
-        let db_access = db_access.clone();
-        tokio::spawn(async move {
-            let mut request = match http::Request::try_from_stream(stream).await {
-                Ok(req) => req,
-                Err(e) => {
-                    utils::log_internal_error(e);
-                    return;
-                },
-            };
-        
-            let response = match routing::handle_request(&mut request, db_access).await {
-                Ok(response) => response,
-                Err(e) => {
-                    utils::log_internal_error(e);
-                    return
-                }, 
-            };
-        
-            if let Err(e) = request.respond(response).await {
-                utils::log_internal_error(e)
-            };
-        });
-    };
+    Ok(())
 }

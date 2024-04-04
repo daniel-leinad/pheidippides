@@ -8,7 +8,7 @@ use serde::Serialize;
 pub type UserId = String;
 pub type MessageId = String;
 
-pub trait DbAccess: Clone {
+pub trait DbAccess: 'static + Send + Clone {
     type Error: 'static + std::error::Error + Send + Sync;
 
     fn users(&self) -> Result<Vec<(UserId, String)>, Self::Error>;
