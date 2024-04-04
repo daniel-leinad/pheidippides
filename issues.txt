@@ -2,3 +2,5 @@
 - Unnecessary http requests from client, e.g when you return to a chat that was previously determined to be completely loaded
 - When session id expires, switching between chats does nothing (with errors in console)
 - /json/messages returns cryptic stuff with cyrillic symbols
+- Authorization doesn't follow best practices
+- HTTP 1/1 not fully implemented
