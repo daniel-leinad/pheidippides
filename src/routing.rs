@@ -190,7 +190,7 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
         None => return failed_login_response().await,
     };
 
-    if authorization::validate_user_info(&user_id, &authorization_params.password) {
+    if authorization::verify_user(&user_id, &authorization_params.password, &db_access)? {
         let session_id = sessions::generate_session_id();
         sessions::update_session_info(session_id.clone(), sessions::SessionInfo { user_id })?;
         let location = "/chat".into();

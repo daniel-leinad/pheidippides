@@ -15,6 +15,9 @@ pub trait DbAccess: 'static + Send + Clone {
     fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Self::Error>;
     fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error>;
     fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<(), Self::Error>;
+    fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error>;
+    fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error>;
+    fn create_user(&self, user_id: &UserId, username: &str) -> Result<(), Self::Error>;
     
     fn username(&self, user_id: &UserId) -> Result<Option<String>, Self::Error> {
         let res = self
@@ -71,4 +74,26 @@ pub struct Message {
 pub enum MessageType {
     In,
     Out,
+}
+
+pub struct AuthenticationInfo {
+    phc_string: password_hash::PasswordHashString,
+}
+
+impl AuthenticationInfo {
+    pub fn phc_string(&self) -> &password_hash::PasswordHashString {
+        &self.phc_string
+    }
+}
+
+impl<'a> From<password_hash::PasswordHash<'a>> for AuthenticationInfo {
+    fn from(value: password_hash::PasswordHash<'a>) -> Self {
+        AuthenticationInfo { phc_string: value.into() }
+    }
+}
+
+impl From<password_hash::PasswordHashString> for AuthenticationInfo {
+    fn from(value: password_hash::PasswordHashString) -> Self {
+        AuthenticationInfo { phc_string: value }
+    }
 }

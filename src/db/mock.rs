@@ -1,3 +1,5 @@
+use crate::authorization;
+
 use super::*;
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
@@ -43,10 +45,16 @@ impl<T> From<PoisonError<T>> for Error {
     }
 }
 
+struct AuthRecord {
+    user_id: UserId,
+    phc_string: password_hash::PasswordHashString,
+}
+
 #[derive(Clone)]
 pub struct Db {
-    users: Arc<Vec<(UserId, String)>>,
+    users: Arc<Mutex<Vec<(UserId, String)>>>,
     messages: Arc<Mutex<Vec<MessageRecord>>>,
+    auth: Arc<Mutex<Vec<AuthRecord>>>,
 }
 
 impl Db {
@@ -87,16 +95,28 @@ impl Db {
             next_id += 1;
         };
 
-        let users = Arc::new(users_vec);
+        let users = Arc::new(Mutex::new(users_vec));
         let messages = Arc::new(Mutex::new(messages_vec));
-        Db { users, messages }
+        let auth = Arc::new(Mutex::new(vec![]));
+        
+        let res = Db { users, messages, auth };
+
+        let credentials = [
+            ("1", "Dan"),
+            ("2", "123"),
+        ];
+
+        for (user_id, password) in credentials {
+            authorization::create_user(&user_id.to_owned(), password, &res);
+        };
+        res
     }
 }
 
 impl DbAccess for Db {
     type Error = Error;
     fn users(&self) -> Result<Vec<(UserId, String)>, Error> {
-        Ok(self.users.iter().map(|value| value.clone()).collect())
+        Ok(self.users.lock()?.iter().map(|value| value.clone()).collect())
     }
 
     fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Error> {
@@ -159,6 +179,37 @@ impl DbAccess for Db {
         };
         let new_id: String = format!("{}", last_id + 1);
         messages_lock.push(MessageRecord::new(&new_id, from, to, &message));
+        Ok(())
+    }
+    
+    fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
+        let res = self.auth.lock()?
+            .iter()
+            .filter_map(|record| 
+                if record.user_id == *user_id {
+                    Some(AuthenticationInfo::from(record.phc_string.clone()))
+                } else {
+                    None
+                })
+            .next();
+        Ok(res)
+    }
+    
+    fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
+        let mut table_locked = self.auth.lock()?;
+        for record in table_locked.iter_mut() {
+            if record.user_id == *user_id {
+                let old_auth = record.phc_string.clone();
+                record.phc_string = auth_info.phc_string;
+                return Ok(Some(old_auth.into()))
+            };
+        };
+        table_locked.push(AuthRecord{ user_id: user_id.clone(), phc_string: auth_info.phc_string });
+        Ok(None)
+    }
+    
+    fn create_user(&self, user_id: &UserId, username: &str) -> Result<(), Self::Error> {
+        self.users.lock()?.push((user_id.clone(), username.to_owned()));
         Ok(())
     }
 }
