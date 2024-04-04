@@ -99,15 +99,15 @@ fn chat_page(
         .replace("{chat_id}", &chat_id.unwrap_or_default());
 
     Ok(Response::HtmlPage {
-        bytes: chat_page.as_bytes().to_owned(),
+        content: chat_page,
         headers: Vec::new(),
     })
 }
 
 fn authorization_page() -> Result<Response> {
-    let bytes = fs::load_template("login.html")?;
+    let content = fs::load_template_as_string("login.html")?;
     return Ok(Response::HtmlPage {
-        bytes,
+        content,
         headers: Vec::new(),
     });
 }
@@ -189,13 +189,13 @@ async fn send_message(request: &mut Request, db_access: impl db::DbAccess, recei
 
     db_access.create_message(params.message, &user_id, receiver)?;
 
-    Ok(Response::HtmlPage { bytes: b"ok.".to_vec(), headers: Vec::new() })
+    Ok(Response::HtmlPage { content: "ok.".to_owned(), headers: Vec::new() })
 }
 
 fn failed_login_response() -> Result<Response> {
-    let bytes = fs::load_template("login_fail.html")?;
+    let content = fs::load_template_as_string("login_fail.html")?;
     Ok(Response::HtmlPage {
-        bytes,
+        content,
         headers: Vec::new(),
     })
 }

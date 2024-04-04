@@ -1,9 +1,12 @@
+mod http_response;
+
 use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{Result, Context};
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream};
 
 use crate::utils::CaseInsensitiveString;
+use http_response::{HttpResponseBuilder, HttpStatusCode};
 
 pub type Header = (CaseInsensitiveString, String);
 
@@ -113,69 +116,55 @@ impl Request {
 
     pub async fn respond(self, response: Response) -> Result<()> {
         let mut writer = tokio::io::BufWriter::new(self.reader.into_inner());
+        let http_response = 
         match response {
             Response::Text(text) => {
-                let text = text.as_bytes();
-                writer.write(b"HTTP/1.1 200 OK\r\n").await?;
-                writer.write(b"Content-Type: text/html\r\n").await?;
-                writer.write(&format!("Content-Length: {}\r\n", text.len()).as_bytes()).await?;
-                writer.write(b"\r\n").await?;
-                writer.write(text).await?;
-                writer.flush().await?;
-                Ok(())
+                HttpResponseBuilder::new()
+                    .body(&text)
+                    .build()
             },
-            Response::HtmlPage { bytes, headers } => {
-                writer.write(b"HTTP/1.1 200 OK\r\n").await?;
-                writer.write(&format!("Content-Length: {}\r\n", bytes.len()).as_bytes()).await?;
-                for (key, value) in headers {
-                    writer.write(&format!("{key}: {value}\r\n").as_bytes()).await?;
+            Response::HtmlPage { content, headers } => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.body(&content);
+                for header in headers {
+                    builder.header(header);
                 };
-                writer.write(b"\r\n").await?;
-                writer.write(&bytes).await?;
-                writer.flush().await?;
-                Ok(())
+                builder.build()
             },
             Response::Redirect { location, headers } => {
-                writer.write(b"HTTP/1.1 303 See Other\r\n").await?;
-                writer.write(&format!("Location: {location}\r\n").as_bytes()).await?;
-                for (key, value) in headers {
-                    writer.write(&format!("{key}: {value}\r\n").as_bytes()).await?;
-                };
-                writer.write(b"\r\n").await?;
-                writer.flush().await?;
-                Ok(())
+                let mut builder = HttpResponseBuilder::new();
+                builder.status(HttpStatusCode::SeeOther);
+                builder.header((CaseInsensitiveString::from("Location"), location));
+                for header in headers {
+                    builder.header(header);
+                }
+                builder.build()
             },
             Response::BadRequest => {
-                let content = b"Bad request";
-                writer.write(b"HTTP/1.1 400 Bad Request\r\n").await?;
-                writer.write(&format!("Content-Length: {}\r\n", content.len()).as_bytes()).await?;
-                writer.write(b"\r\n").await?;
-                writer.write(content).await?;
-                writer.flush().await?;
-                Ok(())
+                HttpResponseBuilder::new()
+                    .status(HttpStatusCode::BadRequest)
+                    .body("Bad request")
+                    .build()
             },
             Response::InternalServerError => {
-                let content = b"Internal Server Error";
-                writer.write(b"HTTP/1.1 500 Internal Server Error\r\n").await?;
-                writer.write(&format!("Content-Length: {}\r\n", content.len()).as_bytes()).await?;
-                writer.write(b"\r\n").await?;
-                writer.write(content).await?;
-                writer.flush().await?;
-                Ok(())
+                HttpResponseBuilder::new()
+                    .status(HttpStatusCode::InternalServerError)
+                    .body("Internal Server Error")
+                    .build()
             },
             Response::Empty => {
-                writer.write(b"HTTP/1.1 200 OK\r\n").await?;
-                writer.write(b"\r\n").await?;
-                writer.flush().await?;
-                Ok(())
+                HttpResponseBuilder::new().build()
             }
-        }
+        };
+        writer.write_all(&http_response.into_bytes()).await?;
+        writer.shutdown().await?;
+        Ok(())
     }
 }
 
 pub enum Response {
     HtmlPage {
-        bytes: Vec<u8>,
+        content: String,
         headers: Vec<Header>,
     },
     Text(String),
@@ -187,7 +176,6 @@ pub enum Response {
     InternalServerError,
     Empty,
 }
-
 // pub async fn run_server<F>(addr: &str, mut request_handler: F) -> Result<()>
 // where
 //     F: Fn(&mut Request) -> Result<Response>,
