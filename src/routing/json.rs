@@ -3,7 +3,6 @@ use super::serde_form_data;
 use super::db::{self, MessageId};
 use crate::http::{Request, Response};
 use serde::Deserialize;
-use crate::utils::get_headers_hashmap;
 use super::{get_authorization, unauthorized_redirect};
 
 //TODO bad name
@@ -19,7 +18,7 @@ pub fn messages_json(request: &Request, db_access: impl db::DbAccess, chat_id: &
         Err(_) => return Ok(Response::BadRequest),
     };
 
-    let headers = get_headers_hashmap(request);
+    let headers = request.headers();
     let user_id = match get_authorization(headers)? {
         Some(res) => res,
         None => return Ok(unauthorized_redirect()),

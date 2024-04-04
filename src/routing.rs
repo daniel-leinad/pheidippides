@@ -4,13 +4,52 @@ mod json;
 use anyhow::{Context, Result};
 use super::{sessions, serde_form_data, authorization};
 use super::db::{self, UserId};
-use super::http::{Request, Response};
+use crate::http::{self, Request, Response};
+use crate::utils::CaseInsensitiveString;
 use serde::Deserialize;
 use std::collections::HashMap;
-use super::utils::{log_internal_error, get_cookies_hashmap, get_headers_hashmap, header_set_cookie};
+use super::utils::{log_internal_error, get_cookies_hashmap, header_set_cookie};
 use crate::fs;
 
-pub fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Result<()> {
+#[derive(Clone)]
+pub struct RequestHandler<D: db::DbAccess> {
+    db_access: D,
+}
+
+impl<D: db::DbAccess> RequestHandler<D> {
+    pub fn new(db_access: D) -> Self {
+        RequestHandler { db_access }
+    }
+}
+
+#[derive(Debug)]
+pub struct RequestHandlerError {
+    inner: anyhow::Error,
+}
+
+impl From<anyhow::Error> for RequestHandlerError {
+    fn from(inner: anyhow::Error) -> Self {
+        RequestHandlerError { inner }
+    }
+}
+
+impl std::fmt::Display for RequestHandlerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl std::error::Error for RequestHandlerError {}
+
+impl<D: db::DbAccess> http::RequestHandler for RequestHandler<D> {
+    type Error = RequestHandlerError;
+
+    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
+        handle_request(request, self.db_access)
+    }
+}
+
+pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -38,17 +77,17 @@ pub fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Res
         path_segments.next(),
     );
 
-    use tiny_http::Method::*;
+    use http::Method::*;
     let response = match query {
-        (Get, None, ..) => main_page(&request),
+        (Get, None, ..) => main_page(request),
         (Get, Some("login"), None, ..) => authorization_page(),
-        (Get, Some("logout"), None, ..) => logout(&request),
-        (Post, Some("authorize"), None, ..) => authorization(&mut request, db_access),
-        (Get, Some("chat"), chat_id, None, ..) => chat_page(&request, db_access, chat_id.map(|s| s.to_owned())),
-        (Post, Some("message"), Some(receiver), None, ..) => send_message(&mut request, db_access, &receiver.to_owned()),
-        (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(&request, db_access),
+        (Get, Some("logout"), None, ..) => logout(request),
+        (Post, Some("authorize"), None, ..) => authorization(request, db_access).await,
+        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, db_access, chat_id.map(|s| s.to_owned())),
+        (Post, Some("message"), Some(receiver), None, ..) => send_message(request, db_access, &receiver.to_owned()).await,
+        (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, db_access),
         (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(db_access, params),
-        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(&request, db_access, chat_id, params),
+        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, db_access, chat_id, params),
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
         _ => Ok(Response::BadRequest),
     };
@@ -58,11 +97,13 @@ pub fn handle_request(mut request: Request, db_access: impl db::DbAccess) -> Res
         Response::InternalServerError
     });
 
-    request.respond(response)
+    Ok(response)
+
+    // request.respond(response)
 }
 
 fn main_page(request: &Request) -> Result<Response> {
-    let headers = get_headers_hashmap(request);
+    let headers = request.headers();
 
     match get_authorization(headers)? {
         Some(_) => Ok(Response::Redirect{location: "/chat".into(), headers: Vec::new()}),
@@ -75,7 +116,7 @@ fn chat_page(
     db_access: impl db::DbAccess,
     chat_id: Option<db::UserId>,
 ) -> Result<Response> {
-    let headers = get_headers_hashmap(request);
+    let headers = request.headers();
 
     let user_id = match get_authorization(headers)? {
         Some(user_id) => user_id,
@@ -96,21 +137,21 @@ fn chat_page(
         .replace("{chat_id}", &chat_id.unwrap_or_default());
 
     Ok(Response::HtmlPage {
-        bytes: chat_page.as_bytes().to_owned(),
+        content: chat_page,
         headers: Vec::new(),
     })
 }
 
 fn authorization_page() -> Result<Response> {
-    let bytes = fs::load_template("login.html")?;
+    let content = fs::load_template_as_string("login.html")?;
     return Ok(Response::HtmlPage {
-        bytes,
+        content,
         headers: Vec::new(),
     });
 }
 
 fn logout(request: &Request) -> Result<Response> {
-    let headers = get_headers_hashmap(request);
+    let headers = request.headers();
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
         //TODO handle error?
@@ -132,8 +173,8 @@ struct AuthorizationParams {
     password: String,
 }
 
-fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response> {
-    let content = request.content()?;
+async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response> {
+    let content = request.content().await?;
 
     let authorization_params: AuthorizationParams =
         match serde_form_data::from_str(&content) {
@@ -153,7 +194,7 @@ fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> Result<
         let session_id = sessions::generate_session_id();
         sessions::update_session_info(session_id.clone(), sessions::SessionInfo { user_id })?;
         let location = "/chat".into();
-        let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)?];
+        let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
 
         Ok(Response::Redirect { location , headers })
     } else {
@@ -166,9 +207,9 @@ struct SendMessageParams {
     message: String,
 }
 
-fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &UserId) -> Result<Response> {
+async fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &UserId) -> Result<Response> {
 
-    let headers = get_headers_hashmap(request);
+    let headers = request.headers();
     let authorization = get_authorization(headers)?;
 
     let user_id = match authorization {
@@ -176,7 +217,7 @@ fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &
         None => return Ok(unauthorized_redirect()),
     };
 
-    let params: SendMessageParams = match serde_json::from_str(&request.content()?) {
+    let params: SendMessageParams = match serde_json::from_str(&request.content().await?) {
         Ok(params) => params,
         Err(_) => {
             //TODO handle this case more precisely for client?
@@ -186,13 +227,13 @@ fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &
 
     db_access.create_message(params.message, &user_id, receiver)?;
 
-    Ok(Response::HtmlPage { bytes: b"ok.".to_vec(), headers: Vec::new() })
+    Ok(Response::HtmlPage { content: "ok.".to_owned(), headers: Vec::new() })
 }
 
 fn failed_login_response() -> Result<Response> {
-    let bytes = fs::load_template("login_fail.html")?;
+    let content = fs::load_template_as_string("login_fail.html")?;
     Ok(Response::HtmlPage {
-        bytes,
+        content,
         headers: Vec::new(),
     })
 }
@@ -201,7 +242,7 @@ fn unauthorized_redirect() -> Response {
     Response::Redirect{location: "/login".into(), headers: Vec::new()}
 }
 
-fn get_authorization(headers: HashMap<String, String>) -> Result<Option<db::UserId>> {
+fn get_authorization(headers: &HashMap<CaseInsensitiveString, String>) -> Result<Option<db::UserId>> {
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
         // TODO handle error

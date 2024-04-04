@@ -10,7 +10,7 @@ mod sessions;
 mod routing;
 mod fs;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -21,7 +21,8 @@ struct Args {
     port: u8,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
     let host = args.host;
     let port = args.port;
@@ -29,9 +30,9 @@ fn main() -> Result<()> {
 
     let db_access = db::mock::Db::new();
 
-    let request_handler = |request| {
-        routing::handle_request(request, db_access.clone())
-    };
+    let request_handler = routing::RequestHandler::new(db_access);
 
-    http::run_server(&addr, request_handler)
+    http::run_server(&addr, request_handler).await.with_context(|| format!("Unable to start server at {addr}"))?;
+
+    Ok(())
 }

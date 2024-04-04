@@ -1,74 +1,170 @@
-pub use tiny_http::{Header, Server};
-use anyhow::{Result, Context, bail};
-use super::utils;
+mod http_response;
+
+use std::{collections::HashMap, str::FromStr};
+
+use anyhow::{Result, Context};
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream};
+
+use crate::utils::{self, CaseInsensitiveString};
+use http_response::{HttpResponseBuilder, HttpStatusCode};
+
+pub type Header = (CaseInsensitiveString, String);
 
 pub struct Request {
-    inner: tiny_http::Request,
+    reader: BufReader<TcpStream>,
+    method: Method,
+    url: String,
+    headers: HashMap<CaseInsensitiveString, String>,
 }
 
-impl From<tiny_http::Request> for Request {
-    fn from(inner: tiny_http::Request) -> Self {
-        Request { inner }
+#[derive(Debug, Clone, Copy)]
+pub enum Method {
+    Get,
+    Put,
+    Post,
+    Delete,
+    Patch,
+    Head,
+    Options,
+    Trace,
+    Connect,
+}
+
+#[derive(Debug)]
+pub enum MethodParseError {
+    IncorrectMethod,
+}
+
+impl std::fmt::Display for MethodParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Incorrect method")
+    }
+}
+
+impl std::error::Error for MethodParseError {}
+
+impl FromStr for Method {
+    type Err = MethodParseError;
+
+    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "get" => Ok(Self::Get),
+            "put" => Ok(Self::Put),
+            "post" => Ok(Self::Post),
+            "delete" => Ok(Self::Delete),
+            "patch" => Ok(Self::Patch),
+            "head" => Ok(Self::Head),
+            "options" => Ok(Self::Options),
+            "trace" => Ok(Self::Trace),
+            "connect" => Ok(Self::Connect),
+            _ => Err(MethodParseError::IncorrectMethod)
+        }
     }
 }
 
 impl Request {
+    pub async fn try_from_stream(stream: TcpStream) -> Result<Self> {
+        let mut reader = BufReader::new(stream);
+
+        let mut first_line = String::new();
+        reader.read_line(&mut first_line).await.context("Could not read line")?;
+        let mut first_line_split = first_line.split_whitespace();
+        let context = || format!("Could not parse first line: {first_line}");
+        let method: Method = first_line_split.next().with_context(context)?.parse()?;
+        let url = first_line_split.next().with_context(context)?.to_owned();
+
+        let mut headers = HashMap::new();
+        loop {
+            let mut next_line = String::new();
+            reader.read_line(&mut next_line).await.context("Could not read line")?;
+            if next_line == "\r\n" {
+                break;
+            } else {
+                let (key, value) = next_line.split_once(": ").with_context(|| format!("Incorrect header: {next_line}"))?;
+                headers.insert(key.into(), value.trim_end().to_string());
+            }
+        };
+        
+        Ok(Request { reader , method, url, headers})
+    }
+
     pub fn url(&self) -> &str {
-        self.inner.url()
+        &self.url
     }
 
-    pub fn method(&self) -> &tiny_http::Method {
-        self.inner.method()
+    pub fn method(&self) -> Method {
+        self.method
     }
 
-    pub fn headers(&self) -> &[Header] {
-        self.inner.headers()
+    pub fn headers(&self) -> &HashMap<CaseInsensitiveString, String> {
+        &self.headers
     }
 
-    pub fn content(&mut self) -> Result<String> {
-        let method = self.method().clone();
-        let url = self.url().to_owned();
-        let mut res = String::new();
-        self.inner.as_reader().read_to_string(&mut res).with_context(|| format!("Couldn't respond to request {method} {url}"))?;
+    pub async fn content(&mut self) -> Result<String> {
+        let header_name: CaseInsensitiveString = "content-length".into();
+        let content_length: usize = self
+            .headers()
+            .get(&header_name)
+            .context("Content-Length header is missing")?
+            .parse()
+            .with_context(|| format!("Couldn't parse content-length as a number: {:?}", self.headers().get(&header_name)))?;
+        let mut buf = vec![0u8; content_length];
+        self.reader.read_exact(&mut buf).await?;
+        let res = String::from_utf8(buf)?;
         Ok(res)
     }
 
-    pub fn respond(self, response: Response) -> Result<()> {
-        let http_response = match response {
-            Response::HtmlPage { bytes, headers } => {
-                let mut http_response = tiny_http::Response::from_data(bytes);
-                headers.into_iter().for_each(|header| http_response.add_header(header));
-                http_response
+    pub async fn respond(self, response: Response) -> Result<()> {
+        let mut writer = tokio::io::BufWriter::new(self.reader.into_inner());
+        let http_response = 
+        match response {
+            Response::Text(text) => {
+                HttpResponseBuilder::new()
+                    .body(&text)
+                    .build()
             },
-            Response::Text(s) => tiny_http::Response::from_string(s),
-            Response::Redirect{ref location, headers} => {
-                let location_header = match Header::from_bytes("Location", location.as_bytes()) {
-                    Ok(header) => header,
-                    Err(()) => bail!("Couldn't create Location header form url {location}"),
+            Response::HtmlPage { content, headers } => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.body(&content);
+                for header in headers {
+                    builder.header(header);
                 };
-                
-                let mut http_response = tiny_http::Response::from_string("Redirecting...")
-                    .with_status_code(303)
-                    .with_header(location_header);
-                headers.into_iter().for_each(|header| http_response.add_header(header));
-                http_response
+                builder.build()
             },
-            Response::BadRequest => tiny_http::Response::from_string("Bad request").with_status_code(400),
-            Response::InternalServerError => tiny_http::Response::from_string("500 Internal Server Error").with_status_code(500),
-            Response::Empty => tiny_http::Response::from_string(""),
+            Response::Redirect { location, headers } => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.status(HttpStatusCode::SeeOther);
+                builder.header((CaseInsensitiveString::from("Location"), location));
+                for header in headers {
+                    builder.header(header);
+                }
+                builder.build()
+            },
+            Response::BadRequest => {
+                HttpResponseBuilder::new()
+                    .status(HttpStatusCode::BadRequest)
+                    .body("Bad request")
+                    .build()
+            },
+            Response::InternalServerError => {
+                HttpResponseBuilder::new()
+                    .status(HttpStatusCode::InternalServerError)
+                    .body("Internal Server Error")
+                    .build()
+            },
+            Response::Empty => {
+                HttpResponseBuilder::new().build()
+            }
         };
-
-        let method = self.method().clone();
-        let url = self.url().to_owned();
-        self.inner
-            .respond(http_response)
-            .with_context(|| format!("Couldn't respond to request {method} {url}"))
+        writer.write_all(&http_response.into_bytes()).await?;
+        writer.shutdown().await?;
+        Ok(())
     }
 }
 
 pub enum Response {
     HtmlPage {
-        bytes: Vec<u8>,
+        content: String,
         headers: Vec<Header>,
     },
     Text(String),
@@ -81,20 +177,47 @@ pub enum Response {
     Empty,
 }
 
-pub fn run_server(addr: &str, mut request_handler: impl FnMut(Request) -> Result<()>) -> Result<()> {
-    let http_server: Server = match Server::http(&addr) {
-        Ok(server) => {
-            eprintln!("Started a server at {addr}");
-            server
-        }
-        Err(_) => bail!("Couldn't start a server"),
-    };
+pub trait RequestHandler: 'static + Send + Clone {
+    type Error: std::error::Error;
+    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send;
+}
 
-    for request in http_server.incoming_requests() {
-        if let Err(e) = request_handler(request.into()) {
-            utils::log_internal_error(e);
-        }
-    };
+pub async fn run_server(addr: &str, request_handler: impl RequestHandler) -> Result<()> {
 
-    Ok(())
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    eprintln!("Started a server at {addr}");
+
+    loop {
+        let (stream, _) = match listener.accept().await {
+            Ok(res) => res,
+            Err(e) => {
+                utils::log_internal_error(e);
+                continue;
+            },
+        };
+
+        let request_handler = request_handler.clone();
+        
+        tokio::spawn(async move {
+            let mut request = match Request::try_from_stream(stream).await {
+                Ok(req) => req,
+                Err(e) => {
+                    utils::log_internal_error(e);
+                    return;
+                },
+            };
+        
+            let response = match request_handler.handle(&mut request).await {
+                Ok(response) => response,
+                Err(e) => {
+                    utils::log_internal_error(e);
+                    return
+                }, 
+            };
+        
+            if let Err(e) = request.respond(response).await {
+                utils::log_internal_error(e)
+            };
+        });
+    };
 }
