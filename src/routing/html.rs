@@ -12,7 +12,7 @@ impl From<&db::ChatInfo> for HtmlString {
         let id = &value.id;
         let username = &value.username;
         HtmlString(format!(
-            "<div class=\"chat\" id=\"chat_{id}\" onclick=\"chatWith({id})\">{username}</div>"
+            "<div class=\"chat\" id=\"chat_{id}\" onclick=\"chatWith('{id}')\">{username}</div>"
         ))
     }
 }
