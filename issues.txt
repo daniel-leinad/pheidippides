@@ -8,3 +8,4 @@
 - Auth verification is blocking
 - Warning during build about rand_core
 - Probably better to rename to and from columns in database
+- In chat.html there shouldn't be an option to send a message
