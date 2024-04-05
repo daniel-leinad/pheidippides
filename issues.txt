@@ -6,3 +6,5 @@
 - HTTP 1/1 not fully implemented
 - Timing attacks (authorization fails faster with incorrect username)
 - Auth verification is blocking
+- Warning during build about rand_core
+- Probably better to rename to and from columns in database
