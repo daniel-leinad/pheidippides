@@ -1,8 +1,9 @@
 use std::fmt::{format, write};
 
 use sqlx::postgres::{PgConnectOptions, PgExecutor};
-use sqlx::{Executor, Database, Column, Row, Connection, query};
+use sqlx::{Executor, Database, Column, Row, Connection, query, Execute};
 use uuid::Uuid;
+use chrono::{DateTime, Local};
 use anyhow::Result;
 use thiserror::Error;
 
@@ -31,23 +32,6 @@ pub enum Error {
     AuthInfoParsingError(#[from] super::AuthenticationInfoParsingError),
 }
 
-// impl std::fmt::Display for Error {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::PgError(e) => write!(f, "Postgres error: {e}"),
-//             Self::AuthInfoParsingError(e) => write!(f, "Auth info parsing error: {e}")
-//         }
-//     }
-// }
-
-// impl std::error::Error for Error {}
-
-// impl From<sqlx::Error> for Error {
-//     fn from(value: sqlx::Error) -> Self {
-//         Self::PgError(value)
-//     }
-// }
-
 impl DbAccess for Db {
     type Error = Error;
 
@@ -67,21 +51,20 @@ impl DbAccess for Db {
     async fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
 
-        //TODO generate random name
-        let temp_table_name = pg_id("_user_ids");
+        let temp_table_name = pg_id(&format!("temp_chat_ids_{}", Uuid::new_v4()));
         conn.execute(query(&format!(r#"
             create temp table {temp_table_name} as 
             select distinct 
-                "from" as user_id
+                sender as user_id
             from messages 
-            where "to" = $1 
+            where receiver = $1 
             
             union 
             
             select 
-                "to" as user_id
+                receiver as user_id
             from messages
-            where "from" = $1
+            where sender = $1
             "#)).bind(user_id)).await?;
 
         let res = conn.fetch_all(query(&format!(r#"
@@ -95,22 +78,41 @@ impl DbAccess for Db {
             .map(|row| {ChatInfo{id: row.get(0), username: row.get(1)}})
             .collect();
 
+        conn.execute(query(&format!("drop table {temp_table_name};"))).await?;
+
         Ok(res)
     }
     
     async fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error> {
-        //TODO starting point argument is ignored
         let mut conn = self.pool.acquire().await?;
-        let res = conn.fetch_all(query(r#"
-            select
-                id,
-                to,
-                message
+        let mut query_builder = sqlx::QueryBuilder::new("");
+        query_builder.push(r#"
+            select id, receiver, message
             from messages
-            where (to = $2 and from = $3) or (to = $3 and from = $2)
-            order by timestamp desc
-            limit $1                
-            "#).bind(MESSAGE_LOAD_BUF_SIZE).bind(this).bind(other)).await?
+            where (receiver = "#).push_bind(this)
+        .push(" and sender = ").push_bind(other)
+        .push(") or (receiver = ").push_bind(other)
+        .push(" and sender = ").push_bind(this)
+        .push(")");
+        
+        if let Some(starting_point) = starting_point {
+            let timestamp = conn
+                .fetch_optional(query("select timestamp from messages where id = $1").bind(starting_point)).await?;
+            //TODO possibly handle case when timestamp is none
+            if let Some(pg_row) = timestamp {
+                let timestamp: DateTime<Local> = pg_row.get(0);
+                query_builder
+                    .push(" and timestamp <= ").push_bind(timestamp)
+                    .push(" and id < ").push_bind(starting_point);
+            }
+        }
+
+        query_builder.push(" order by timestamp desc");
+        query_builder.push(" limit ").push_bind(MESSAGE_LOAD_BUF_SIZE);
+
+        let query = query_builder.build();
+        dbg!(query.sql());
+        let res = conn.fetch_all(query).await?
             .iter()
             .map(|row| {
                 let id = row.get(0);
@@ -124,7 +126,20 @@ impl DbAccess for Db {
     }
     
     async fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<(), Self::Error> {
-        todo!()
+        let mut conn = self.pool.acquire().await?;
+        let message_id = Uuid::new_v4();
+        let timestamp = Local::now();
+        conn.execute(query(r#"
+                insert into messages(id, sender, receiver, message, timestamp)
+                values ($1, $2, $3, $4, $5)
+            "#)
+            .bind(message_id)
+            .bind(from)
+            .bind(to)
+            .bind(msg)
+            .bind(timestamp))
+            .await?;
+        Ok(())
     }
     
     async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
@@ -184,8 +199,6 @@ fn pg_id(input: &str) -> String {
     format!("\"{}\"", input.replace("\"", "\"\""))
 }
 
-
-//TODO move to library code for testing
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,6 +215,6 @@ mod tests {
         assert_eq!(pg_id(input), r#""моя ""таблица""""#);
 
         let input = r#"weird table , - ; " : "#;
-        assert_eq!(pg_id(input), r#"weird table , - ; "" : "#);
+        assert_eq!(pg_id(input), r#""weird table , - ; "" : ""#);
     }
 }
