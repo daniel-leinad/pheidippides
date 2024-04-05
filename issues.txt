@@ -4,3 +4,4 @@
 - /json/messages returns cryptic stuff with cyrillic symbols
 - Authorization doesn't follow best practices
 - HTTP 1/1 not fully implemented
+- Timing attacks (authorization fails faster with incorrect username)
