@@ -21,6 +21,7 @@
       }
 
       document.getElementById("signin").addEventListener("click", async function(e) {
+        e.preventDefault();
 
         let username = document.getElementById("login").value;
         let password = document.getElementById("password").value;
@@ -44,8 +45,9 @@
           errors.add("PasswordNotConfirmed")
         }
 
+        displayAuthErrors(errors);
+        
         if (errors.size) {
-          displayAuthErrors(errors);
           return;
         }
 
