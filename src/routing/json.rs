@@ -31,5 +31,5 @@ pub fn messages_json(request: &Request, db_access: impl db::DbAccess, chat_id: &
         .collect();
     let json_messages = serde_json::json!(messages);
     //TODO add special type json?
-    Ok(Response::Text(json_messages.to_string()))
+    Ok(Response::Text{text: json_messages.to_string(), headers: vec![]})
 }

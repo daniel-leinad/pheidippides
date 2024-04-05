@@ -118,10 +118,13 @@ impl Request {
         let mut writer = tokio::io::BufWriter::new(self.reader.into_inner());
         let http_response = 
         match response {
-            Response::Text(text) => {
-                HttpResponseBuilder::new()
-                    .body(&text)
-                    .build()
+            Response::Text{text, headers} => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.body(&text);
+                for header in headers {
+                    builder.header(header);
+                }
+                builder.build()
             },
             Response::HtmlPage { content, headers } => {
                 let mut builder = HttpResponseBuilder::new();
@@ -167,7 +170,10 @@ pub enum Response {
         content: String,
         headers: Vec<Header>,
     },
-    Text(String),
+    Text{
+        text: String,
+        headers: Vec<Header>,
+    },
     Redirect{
         location: String, 
         headers: Vec<Header>

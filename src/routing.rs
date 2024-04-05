@@ -6,7 +6,7 @@ use super::{sessions, serde_form_data, authorization};
 use super::db::{self, UserId};
 use crate::http::{self, Request, Response};
 use crate::utils::CaseInsensitiveString;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use super::utils::{log_internal_error, get_cookies_hashmap, header_set_cookie};
 use crate::fs;
@@ -67,7 +67,6 @@ pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess)
         .split('/')
         .filter(|s| !s.is_empty());
 
-
     let method = request.method().clone();
     let query = (
         &method,
@@ -81,6 +80,8 @@ pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess)
     let response = match query {
         (Get, None, ..) => main_page(request),
         (Get, Some("login"), None, ..) => authorization_page().await,
+        (Get, Some("signup"), None, ..) => signup_page().await,
+        (Post, Some("signup"), None, ..) => signup(request, db_access).await,
         (Get, Some("logout"), None, ..) => logout(request),
         (Post, Some("authorize"), None, ..) => authorization(request, db_access).await,
         (Get, Some("chat"), chat_id, None, ..) => chat_page(request, db_access, chat_id.map(|s| s.to_owned())).await,
@@ -144,10 +145,16 @@ async fn chat_page(
 
 async fn authorization_page() -> Result<Response> {
     let content = fs::load_template_as_string("login.html").await?;
-    return Ok(Response::HtmlPage {
+    Ok(Response::HtmlPage {
         content,
         headers: Vec::new(),
-    });
+    })
+}
+
+async fn signup_page() -> Result<Response> {
+    let content = fs::load_template_as_string("signup.html").await?;
+    let headers = vec![];
+    Ok(Response::HtmlPage { content , headers })
 }
 
 fn logout(request: &Request) -> Result<Response> {
@@ -200,6 +207,44 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
     } else {
         failed_login_response().await
     }
+}
+
+#[derive(Serialize)]
+struct SignupResponse {
+    success: bool,
+    errors: Vec<SignupError>,
+}
+
+#[derive(Serialize)]
+enum SignupError {
+    UsernameTaken,
+}
+
+async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response> {
+    let content = request.content().await?;
+    let auth_params: AuthorizationParams = match serde_json::from_str(&content) {
+        Ok(auth_params) => auth_params,
+        Err(_) => {
+            //TODO handle this case more precisely for client?
+            return Ok(Response::BadRequest);
+        }
+    };
+
+    let user_id = match db_access.create_user(&auth_params.login)? {
+        Some(user_id) => user_id,
+        None => {
+            let signup_response = SignupResponse{ success: false, errors: vec![SignupError::UsernameTaken] };
+            return Ok(Response::Text{text: serde_json::json!(signup_response).to_string(), headers: vec![]})
+        },
+    };
+
+    authorization::create_user(&user_id, &auth_params.password, &db_access)?;
+
+    let signup_response = serde_json::json!(SignupResponse{ success: true, errors: vec![] });
+    let session_id = sessions::generate_session_id();
+    let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
+    sessions::update_session_info(session_id, sessions::SessionInfo{ user_id })?;
+    Ok(Response::Text{ text: signup_response.to_string(), headers })
 }
 
 #[derive(Deserialize)]

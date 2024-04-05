@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Авторизация</title>
+  </head>
+  <script>
+    addEventListener("load", function(e) {
+      const authErrorMap = new Map;
+      authErrorMap.set("UsernameTaken", document.getElementById("usernameTakenError"));
+      authErrorMap.set("PasswordNotConfirmed", document.getElementById("passwordNotConfirmedError"));
+      authErrorMap.set("UsernameEmpty", document.getElementById("usernameEmptyError"));
+      authErrorMap.set("PasswordEmpty", document.getElementById("passwordEmptyError"));
+      authErrorMap.set("PasswordConfirmEmpty", document.getElementById("passwordConfirmEmptyError"));
+
+      function displayAuthErrors(errors) {
+        // console.log("errors = " + Array.from(errors).join(", "));
+        for (const [error, el] of authErrorMap) {
+          el.toggleAttribute("hidden", !errors.has(error));
+        };
+      }
+
+      document.getElementById("signin").addEventListener("click", async function(e) {
+
+        let username = document.getElementById("login").value;
+        let password = document.getElementById("password").value;
+        let passwordConfirm = document.getElementById("passwordConfirm").value;
+
+        let errors = new Set();
+
+        if (!username) {
+          errors.add("UsernameEmpty");
+        }
+
+        if (!password) {
+          errors.add("PasswordEmpty");
+        }
+
+        if (!passwordConfirm) {
+          errors.add("PasswordConfirmEmpty");
+        }
+
+        if (password !== passwordConfirm) {
+          errors.add("PasswordNotConfirmed")
+        }
+
+        if (errors.size) {
+          displayAuthErrors(errors);
+          return;
+        }
+
+        let interfaceLock = document.getElementById("interfaceLock");
+        interfaceLock.toggleAttribute("hidden", false);
+        let resp = await fetch("/signup", {
+          method: "POST", 
+          body: JSON.stringify({
+            login: document.getElementById("login").value,
+            password: document.getElementById("password").value
+          })
+        });
+        let body = await resp.json();
+        if (body.success) {
+          location.href = "/chat";
+        } else {
+          console.log("body.errors = " + body.errors);
+          for (error of body.errors) {
+            errors.add(error);
+          }
+          displayAuthErrors(errors);
+        };
+        interfaceLock.toggleAttribute("hidden", true);
+      });
+    });
+  </script>
+  <style>
+    body {
+    font: normal;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: large;
+  }
+
+  button {
+    font-size: large;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  input {
+    font-size: large;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  .error {
+    color: red;
+  }
+
+  .interfaceLock {
+    background-color: white;
+    opacity: .5;
+    position: absolute;
+    top: 0%;
+    left: 0%;
+    height: 100%;
+    width: 100%;
+  }
+  </style>
+  <body>
+    <div class="interfaceLock" id="interfaceLock" hidden></div>
+    <form action="javascript:void(0);" name="form" id="form">
+      <h1>Зарегистрироваться</h1>
+
+      <section>
+        <label for="login">Имя пользователя</label>
+        <br>        
+        <input id="login" name="login" autocomplete="username" required>
+        <span id="usernameEmptyError" class="error" hidden>Поле не заполнено</span>
+        <span id="usernameTakenError" class="error" hidden>Имя пользователя занято</span>
+      </section>
+                        
+      <section>
+        <label for="password">Пароль</label>
+        <br>        
+        <input type="password" id="password" name="password" required>
+        <span id="passwordEmptyError" class="error" hidden>Поле не заполнено</span>
+      </section>
+
+      <section>
+        <label for="passwordConfirm">Повторите пароль</label>
+        <br>        
+        <input type="password" id="passwordConfirm" required>
+        <span id="passwordConfirmEmptyError" class="error" hidden>Поле не заполнено</span>
+        <span id="passwordNotConfirmedError" class="error" hidden>Пароли не совпадают</span>
+      </section>
+
+      <button id="signin">Зарегистрироваться</button>
+    </form>
+    <p><a href="/login">Войти</a></p>
+  </body>
+</html>

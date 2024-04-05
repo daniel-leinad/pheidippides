@@ -4,6 +4,17 @@
     <meta charset="utf-8">
     <title>Авторизация</title>
   </head>
+  <script>
+    addEventListener("load", function(e) {
+      document.getElementById("signin").addEventListener("click", async function(e) {
+        document.getElementById("interfaceLock").toggleAttribute("hidden", false);
+      });
+    });
+
+    addEventListener("pageshow", function(e) {
+      document.getElementById("interfaceLock").toggleAttribute("hidden", true);
+    })
+  </script>
   <style>
     body {
     font: normal;
@@ -20,20 +31,36 @@
     font-size: large;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   }
+
+  .interfaceLock {
+    background-color: white;
+    opacity: .5;
+    position: absolute;
+    top: 0%;
+    left: 0%;
+    height: 100%;
+    width: 100%;
+  }
   </style>
   <body>
+    <div class="interfaceLock" id="interfaceLock" hidden></div>
     <form action="/authorize" method="post" name="form" id="form">
       <h1>Войти</h1>
 
-      <section>        
-        <input id="login" name="login" required>
+      <section>
+        <label for="login">Имя пользователя</label>
+        <br>        
+        <input id="login" name="login" autocomplete="username" required>
       </section>
                         
-      <section>        
-        <input id="password" name="password" required>
+      <section>
+        <label for="password">Пароль</label>
+        <br>        
+        <input id="password" name="password" type="password" required>
       </section>
 
       <button id="signin">Войти</button>
     </form>
+    <p><a href="/signup">Зарегистрироваться</a></p>
   </body>
 </html>

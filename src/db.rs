@@ -17,7 +17,7 @@ pub trait DbAccess: 'static + Send + Clone {
     fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<(), Self::Error>;
     fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error>;
     fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error>;
-    fn create_user(&self, user_id: &UserId, username: &str) -> Result<(), Self::Error>;
+    fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error>;
     
     fn username(&self, user_id: &UserId) -> Result<Option<String>, Self::Error> {
         let res = self

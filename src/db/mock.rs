@@ -53,6 +53,7 @@ struct AuthRecord {
 #[derive(Clone)]
 pub struct Db {
     users: Arc<Mutex<Vec<(UserId, String)>>>,
+    last_user_id: Arc<Mutex<u32>>,
     messages: Arc<Mutex<Vec<MessageRecord>>>,
     auth: Arc<Mutex<Vec<AuthRecord>>>,
 }
@@ -98,8 +99,9 @@ impl Db {
         let users = Arc::new(Mutex::new(users_vec));
         let messages = Arc::new(Mutex::new(messages_vec));
         let auth = Arc::new(Mutex::new(vec![]));
+        let last_user_id = Arc::new(Mutex::new(next_id));
         
-        let res = Db { users, messages, auth };
+        let res = Db { users, messages, auth, last_user_id };
 
         let credentials = [
             ("1", "Dan"),
@@ -107,7 +109,7 @@ impl Db {
         ];
 
         for (user_id, password) in credentials {
-            authorization::create_user(&user_id.to_owned(), password, &res);
+            authorization::create_user(&user_id.to_owned(), password, &res).expect("Unable to create authentication while making mock db");
         };
         res
     }
@@ -208,8 +210,19 @@ impl DbAccess for Db {
         Ok(None)
     }
     
-    fn create_user(&self, user_id: &UserId, username: &str) -> Result<(), Self::Error> {
-        self.users.lock()?.push((user_id.clone(), username.to_owned()));
-        Ok(())
+    fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
+        let mut table_locked = self.users.lock()?;
+        let mut last_user_id_locked = self.last_user_id.lock()?;
+
+        if table_locked.iter().filter(|record| record.1 == username).next().is_some() {
+            return Ok(None)
+        };
+
+        let user_id = format!("{last_user_id_locked}");
+
+
+        table_locked.push((user_id.clone(), username.to_owned()));
+        *last_user_id_locked += 1;
+        Ok(Some(user_id))
     }
 }
