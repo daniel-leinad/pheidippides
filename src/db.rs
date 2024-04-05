@@ -1,52 +1,73 @@
 pub mod mock;
+pub mod pg;
 
 use std::cmp::PartialEq;
+use std::fmt::Display;
 use std::hash::Hash;
+use std::future::Future;
+use std::str::FromStr;
+use thiserror::Error;
 
 use serde::Serialize;
 
-pub type UserId = String;
-pub type MessageId = String;
+use uuid::Uuid;
 
-pub trait DbAccess: 'static + Send + Clone {
+pub type MessageId = Uuid;
+pub type UserId = Uuid;
+
+// written as a macro to use Self::Error
+macro_rules! async_result {
+    ($t:ty) => {
+        impl Future<Output = Result<$t, Self::Error>> + Send
+    };
+}
+
+pub trait DbAccess: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;
 
-    fn users(&self) -> Result<Vec<(UserId, String)>, Self::Error>;
-    fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Self::Error>;
-    fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error>;
-    fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<(), Self::Error>;
-    fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error>;
-    fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error>;
-    fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error>;
+    // fn users(&self) -> impl Future<Output = Result<Vec<(UserId, String)>, Self::Error>> + Send;
+    fn users(&self) -> async_result!(Vec<(UserId, String)>);
+    fn chats(&self, user_id: &UserId) -> async_result!(Vec<ChatInfo>);
+    fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> async_result!(Vec<Message>);
+    fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> async_result!(());
+    fn authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
+    fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
+    fn create_user(&self, username: &str) -> async_result!(Option<UserId>);
     
-    fn username(&self, user_id: &UserId) -> Result<Option<String>, Self::Error> {
-        let res = self
-            .users()?
-            .into_iter()
-            .filter_map(|(id, username)| {if &id == user_id {Some(username)} else {None}})
-            .next();
-        Ok(res)
+    fn username(&self, user_id: &UserId) -> async_result!(Option<String>) {
+        async move {
+            let users = self.users().await?;
+            let res = users  
+                .into_iter()
+                .filter_map(|(id, username)| {if &id == user_id {Some(username)} else {None}})
+                .next();
+            Ok(res)
+        }
     }
 
-    fn user_id(&self, requested_username: &String) -> Result<Option<UserId>, Self::Error> {
-        let res = self
-            .users()?
-            .into_iter()
-            .filter_map(|(id, username)| {if &username == requested_username {Some(id)} else {None}})
-            .next();
-        Ok(res)
+    fn user_id(&self, requested_username: &String) -> async_result!(Option<UserId>) {
+        async move {
+            let res = self
+                .users().await?
+                .into_iter()
+                .filter_map(|(id, username)| {if &username == requested_username {Some(id)} else {None}})
+                .next();
+            Ok(res)
+        }
     }
 
-    fn find_chats(&self, query: &str) -> Result<Vec<ChatInfo>, Self::Error> {
-        let query = query.to_lowercase();
-        let res = self.users()?.into_iter().filter_map(|(user_id, username)| {
-            if username.to_lowercase().contains(&query) {
-                Some(ChatInfo::new(user_id, username))
-            } else {
-                None
-            }
-        }).collect();
-        Ok(res)
+    fn find_chats(&self, query: &str) -> async_result!(Vec<ChatInfo>) {
+        async {
+            let query = query.to_lowercase();
+            let res = self.users().await?.into_iter().filter_map(|(user_id, username)| {
+                if username.to_lowercase().contains(&query) {
+                    Some(ChatInfo::new::<Self>(user_id, username))
+                } else {
+                    None
+                }
+            }).collect();
+            Ok(res)
+        }
     }
 }
 
@@ -57,13 +78,15 @@ pub struct ChatInfo {
 }
 
 impl ChatInfo {
-    fn new(id: UserId, username: String) -> Self {
+    fn new<T: DbAccess>(id: UserId, username: String) -> Self
+    {
         ChatInfo {username, id}
     }
 }
 
 #[derive(Serialize)]
 pub struct Message {
+    #[serde(serialize_with = "crate::utils::serialize_uuid")]
     pub id: MessageId,
     #[serde(rename(serialize = "type"))]
     pub message_type: MessageType,
@@ -95,5 +118,22 @@ impl<'a> From<password_hash::PasswordHash<'a>> for AuthenticationInfo {
 impl From<password_hash::PasswordHashString> for AuthenticationInfo {
     fn from(value: password_hash::PasswordHashString) -> Self {
         AuthenticationInfo { phc_string: value }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum AuthenticationInfoParsingError {
+    #[error("Incorrect phc string: {0}")]
+    IncorrectPHCString(String),
+}
+
+impl FromStr for AuthenticationInfo {
+    type Err = AuthenticationInfoParsingError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.parse() {
+            Ok(phc_string) => Ok(AuthenticationInfo{phc_string}),
+            Err(_) => Err(AuthenticationInfoParsingError::IncorrectPHCString(s.to_owned()))
+        }
     }
 }

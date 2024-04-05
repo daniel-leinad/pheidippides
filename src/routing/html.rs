@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crate::serde_form_data;
 use super::db::{self, UserId};
 use crate::http::{Request, Response};
@@ -17,19 +17,20 @@ impl From<&db::ChatInfo> for HtmlString {
     }
 }
 
-pub fn chats_html_response(request: &Request, db_access: impl db::DbAccess) -> Result<Response> {
+pub async fn chats_html_response(request: &Request, db_access: impl db::DbAccess) -> Result<Response> {
     let headers = request.headers();
     let authorization = get_authorization(headers)?;
     let response_string = match authorization {
-        Some(user_id) => chats_html(&db_access, &user_id)?,
+        Some(user_id) => chats_html(&db_access, &user_id).await?,
         None => String::from("Unauthorized"),
     };
     Ok(Response::Text{text: response_string, headers: vec![]})
 }
 
-pub fn chats_html(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String> {
+pub async fn chats_html(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String> {
     let res: String = db_access
-        .chats(user_id)?
+        .chats(user_id).await
+        .with_context(|| format!("Couldn't fetch chats for user {user_id}"))?
         .iter()
         .map(|chat_info| HtmlString::from(chat_info).0)
         .intersperse(String::from("\n"))
@@ -42,7 +43,7 @@ struct ChatSearchParams {
     query: String,
 }
 
-pub fn chatsearch_html(db_access: impl db::DbAccess, params: &str) -> Result<Response> {
+pub async fn chatsearch_html(db_access: impl db::DbAccess, params: &str) -> Result<Response> {
 
     let search_params: ChatSearchParams = match serde_form_data::from_str(params) {
         Ok(res) => res,
@@ -50,7 +51,8 @@ pub fn chatsearch_html(db_access: impl db::DbAccess, params: &str) -> Result<Res
     };
 
     let chats_html: String = db_access
-        .find_chats(&search_params.query)?
+        .find_chats(&search_params.query).await
+        .with_context(|| format!("Could't find chats with query {}", &search_params.query))?
         .into_iter()
         .map(|chat_info| HtmlString::from(&chat_info).0)
         .intersperse("\n".to_owned())

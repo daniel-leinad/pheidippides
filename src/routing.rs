@@ -2,8 +2,10 @@ mod html;
 mod json;
 
 use anyhow::{Context, Result};
+use tokio::sync::broadcast::Receiver;
 use super::{sessions, serde_form_data, authorization};
-use super::db::{self, UserId};
+use super::db;
+use crate::db::DbAccess;
 use crate::http::{self, Request, Response};
 use crate::utils::CaseInsensitiveString;
 use serde::{Deserialize, Serialize};
@@ -84,12 +86,13 @@ pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess)
         (Post, Some("signup"), None, ..) => signup(request, db_access).await,
         (Get, Some("logout"), None, ..) => logout(request),
         (Post, Some("authorize"), None, ..) => authorization(request, db_access).await,
-        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, db_access, chat_id.map(|s| s.to_owned())).await,
-        (Post, Some("message"), Some(receiver), None, ..) => send_message(request, db_access, &receiver.to_owned()).await,
-        (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, db_access),
-        (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(db_access, params),
-        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, db_access, chat_id, params),
+        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, db_access, chat_id).await,
+        (Post, Some("message"), Some(receiver), None, ..) => send_message(request, db_access, receiver).await,
+        (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, db_access).await,
+        (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(db_access, params).await,
+        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, db_access, chat_id, params).await,
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
+        (Get, Some("users"), None, ..) => get_users_debug(db_access).await,
         _ => Ok(Response::BadRequest),
     };
 
@@ -103,6 +106,20 @@ pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess)
     // request.respond(response)
 }
 
+async fn get_users_debug(db_access: impl db::DbAccess) -> Result<Response> {
+    let mut res = String::new();
+
+    for user_info in db_access.users().await.context("Couldn't fetch users")? {
+        res.push_str(&user_info.0.to_string());
+        res.push_str(" ");
+        res.push_str(&user_info.1);
+        res.push_str("\n");
+    };
+
+    Ok(Response::Text { text: res, headers: vec![] })
+
+}
+
 fn main_page(request: &Request) -> Result<Response> {
     let headers = request.headers();
 
@@ -112,11 +129,13 @@ fn main_page(request: &Request) -> Result<Response> {
     }
 }
 
-async fn chat_page(
+async fn chat_page<D: DbAccess>(
     request: &Request,
-    db_access: impl db::DbAccess,
-    chat_id: Option<db::UserId>,
+    db_access: D,
+    chat_id: Option<&str>,
 ) -> Result<Response> {
+    
+
     let headers = request.headers();
 
     let user_id = match get_authorization(headers)? {
@@ -125,12 +144,12 @@ async fn chat_page(
     };
 
     let username = db_access
-        .username(&user_id)?
+        .username(&user_id).await.with_context(|| format!("Couldn't fetch username of {user_id}"))?
         .context("Couldn't retrieve username from user_id stored SESSION_INFO")?;
 
     let chat_page_template = fs::load_template_as_string("chat.html").await?;
 
-    let chats_html: String = html::chats_html(&db_access, &user_id)?;
+    let chats_html: String = html::chats_html(&db_access, &user_id).await?;
 
     let chat_page = chat_page_template
         .replace("{username}", &username)
@@ -192,12 +211,16 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
             }
         };
 
-    let user_id = match db_access.user_id(&authorization_params.login)? {
+    let user_id = match db_access
+        .user_id(&authorization_params.login).await
+        .with_context(|| format!("Couldn't fetch user_id of {}", &authorization_params.login))? {
         Some(user_id) => user_id,
         None => return failed_login_response().await,
     };
 
-    if authorization::verify_user(&user_id, &authorization_params.password, &db_access)? {
+    if authorization
+        ::verify_user(&user_id, &authorization_params.password, &db_access).await
+        .with_context(|| format!("Authorization error: couldn't verify user {}", &user_id))? {
         let session_id = sessions::generate_session_id();
         sessions::update_session_info(session_id.clone(), sessions::SessionInfo { user_id })?;
         let location = "/chat".into();
@@ -230,7 +253,9 @@ async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<R
         }
     };
 
-    let user_id = match db_access.create_user(&auth_params.login)? {
+    let user_id = match db_access
+        .create_user(&auth_params.login).await
+        .with_context(|| format!("Couldn't create user {}", &auth_params.login))? {
         Some(user_id) => user_id,
         None => {
             let signup_response = SignupResponse{ success: false, errors: vec![SignupError::UsernameTaken] };
@@ -238,7 +263,8 @@ async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<R
         },
     };
 
-    authorization::create_user(&user_id, &auth_params.password, &db_access)?;
+    authorization::create_user(&user_id, &auth_params.password, &db_access).await.with_context(
+        || format!("Authoriazation error: couldn't create user {}", &auth_params.login))?;
 
     let signup_response = serde_json::json!(SignupResponse{ success: true, errors: vec![] });
     let session_id = sessions::generate_session_id();
@@ -252,7 +278,12 @@ struct SendMessageParams {
     message: String,
 }
 
-async fn send_message(request: &mut Request, db_access: impl db::DbAccess, receiver: &UserId) -> Result<Response> {
+async fn send_message<D: db::DbAccess>(request: &mut Request, db_access: D, receiver: &str) -> Result<Response> {
+
+    let receiver: db::UserId = match receiver.parse() {
+        Ok(res) => res,
+        Err(_) => return Ok(Response::BadRequest),
+    };
 
     let headers = request.headers();
     let authorization = get_authorization(headers)?;
@@ -270,7 +301,7 @@ async fn send_message(request: &mut Request, db_access: impl db::DbAccess, recei
         },
     };
 
-    db_access.create_message(params.message, &user_id, receiver)?;
+    db_access.create_message(params.message, &user_id, &receiver).await.with_context(|| format!("Couldn't create message from {user_id} to {receiver}"))?;
 
     Ok(Response::HtmlPage { content: "ok.".to_owned(), headers: Vec::new() })
 }

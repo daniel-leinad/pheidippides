@@ -1,5 +1,5 @@
-use crate::db::{UserId, DbAccess};
-use anyhow::{Result, bail};
+use crate::db::{DbAccess, UserId};
+use anyhow::{bail, Context, Result};
 
 use argon2::{
     password_hash::{
@@ -9,8 +9,10 @@ use argon2::{
     Argon2
 };
 
-pub fn verify_user(user_id: &UserId, password: &str, db_access: &impl DbAccess) -> Result<bool> {
-    let auth_info = match db_access.authentication(user_id)? {
+pub async fn verify_user<D: DbAccess>(user_id: &UserId, password: &str, db_access: &D) -> Result<bool> {
+    let auth_info = match db_access
+        .authentication(user_id).await
+        .with_context(|| format!("Couldn't fetch authentification for {user_id}"))? {
         Some(auth_info) => auth_info,
         None => return Ok(false),
     };
@@ -19,13 +21,13 @@ pub fn verify_user(user_id: &UserId, password: &str, db_access: &impl DbAccess) 
     Ok(Argon2::default().verify_password(password.as_bytes(), &password_hash).is_ok())
 }
 
-pub fn create_user(user_id: &UserId, password: &str, db_access: &impl DbAccess) -> Result<()> {
+pub async fn create_user<D: DbAccess>(user_id: &UserId, password: &str, db_access: &D) -> Result<()> {
     let salt = SaltString::generate(OsRng);
     let hash_password = match Argon2::default().hash_password(password.as_bytes(), &salt) {
         Ok(hash) => hash,
         Err(e) => bail!("Couldn't generate hash from {password}: {e}"),
     };
     let auth_info = hash_password.into();
-    db_access.update_authentication(user_id, auth_info)?; //TODO check if user already existed?
+    db_access.update_authentication(user_id, auth_info).await.with_context(|| format!("Couldn't update authentification for {user_id}"))?; //TODO check if user already existed?
     Ok(())
 }

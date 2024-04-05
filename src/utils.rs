@@ -1,10 +1,15 @@
 use anyhow::Result;
+use serde::Serializer;
 use std::collections::HashMap;
 use std::hash::Hash;
 use super::http::Header;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct CaseInsensitiveString(String);
+
+pub fn serialize_uuid<S: Serializer>(uuid: &uuid::Uuid, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&uuid.to_string())
+}
 
 impl From<&str> for CaseInsensitiveString {
     fn from(value: &str) -> Self {
