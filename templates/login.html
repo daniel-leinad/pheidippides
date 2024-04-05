@@ -7,7 +7,9 @@
   <script>
     addEventListener("load", function(e) {
       document.getElementById("signin").addEventListener("click", async function(e) {
-        document.getElementById("interfaceLock").toggleAttribute("hidden", false);
+        if (document.getElementById("form").reportValidity()) {
+          document.getElementById("interfaceLock").toggleAttribute("hidden", false);
+        }
       });
     });
 
