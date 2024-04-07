@@ -2,7 +2,6 @@ use crate::authorization;
 
 use super::*;
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
-use uuid::Uuid;
 
 const MESSAGE_LOAD_BUF_SIZE: usize = 50;
 
@@ -24,14 +23,12 @@ impl MessageRecord {
 #[derive(Debug)]
 pub enum Error {
     ThreadPoisonError,
-    IncorrectMessageId(MessageId),
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ThreadPoisonError => write!(f, "Thread poisoning error"),
-            Self::IncorrectMessageId(msg_id) => write!(f, "Incorrect message id: {msg_id}")
         }
     }
 }

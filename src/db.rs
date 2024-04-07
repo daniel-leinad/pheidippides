@@ -2,7 +2,6 @@ pub mod mock;
 pub mod pg;
 
 use std::cmp::PartialEq;
-use std::fmt::Display;
 use std::hash::Hash;
 use std::future::Future;
 use std::str::FromStr;
@@ -57,11 +56,11 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
         }
     }
 
-    fn find_chats(&self, query: &str) -> async_result!(Vec<ChatInfo>) {
+    fn find_chats(&self, search_query: &str) -> async_result!(Vec<ChatInfo>) {
         async {
-            let query = query.to_lowercase();
+            let search_query = search_query.to_lowercase();
             let res = self.users().await?.into_iter().filter_map(|(user_id, username)| {
-                if username.to_lowercase().contains(&query) {
+                if username.to_lowercase().contains(&search_query) {
                     Some(ChatInfo::new::<Self>(user_id, username))
                 } else {
                     None

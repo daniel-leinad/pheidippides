@@ -2,7 +2,6 @@ mod html;
 mod json;
 
 use anyhow::{Context, Result};
-use tokio::sync::broadcast::Receiver;
 use super::{sessions, serde_form_data, authorization};
 use super::db;
 use crate::db::DbAccess;

@@ -1,7 +1,5 @@
-use std::fmt::{format, write};
-
-use sqlx::postgres::{PgConnectOptions, PgExecutor};
-use sqlx::{Executor, Database, Column, Row, Connection, query, Execute};
+use sqlx::postgres::PgConnectOptions;
+use sqlx::{Executor, Row, query};
 use uuid::Uuid;
 use chrono::{DateTime, Local};
 use anyhow::Result;
