@@ -4,7 +4,6 @@
 - Authorization doesn't follow best practices
 - HTTP 1/1 not fully implemented (like Keep-Alive)
 - Timing attacks (authorization fails faster with incorrect username)
-- Auth verification is blocking
 - In chat.html there shouldn't be an option to send a message if no chat is selected
 - Messages don't dynamically update on the client
 - Add text field to Response::BadRequest for clearer error messages

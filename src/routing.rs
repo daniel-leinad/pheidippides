@@ -217,7 +217,7 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
     };
 
     if authorization
-        ::verify_user(&user_id, &authorization_params.password, &db_access).await
+        ::verify_user(&user_id, authorization_params.password, &db_access).await
         .with_context(|| format!("Authorization error: couldn't verify user {}", &user_id))? {
         let session_id = sessions::generate_session_id();
         sessions::update_session_info(session_id.clone(), sessions::SessionInfo { user_id })?;
@@ -261,7 +261,7 @@ async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<R
         },
     };
 
-    authorization::create_user(&user_id, &auth_params.password, &db_access).await.with_context(
+    authorization::create_user(&user_id, auth_params.password, &db_access).await.with_context(
         || format!("Authoriazation error: couldn't create user {}", &auth_params.login))?;
 
     let signup_response = serde_json::json!(SignupResponse{ success: true, errors: vec![] });

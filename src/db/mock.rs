@@ -112,7 +112,7 @@ impl Db {
         ];
 
         for (user_id, password) in credentials {
-            authorization::create_user(&user_id.to_owned(), password, &res).await.expect("Unable to create authentication while making mock db");
+            authorization::create_user(&user_id.to_owned(), password.to_owned(), &res).await.expect("Unable to create authentication while making mock db");
         };
         res
     }
