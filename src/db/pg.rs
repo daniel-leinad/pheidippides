@@ -111,7 +111,6 @@ impl DbAccess for Db {
         query_builder.push(" limit ").push_bind(MESSAGE_LOAD_BUF_SIZE);
 
         let query = query_builder.build();
-        dbg!(query.sql());
         let res = conn.fetch_all(query).await?
             .iter()
             .map(|row| {
@@ -170,7 +169,6 @@ impl DbAccess for Db {
         let user_id = Uuid::new_v4();
         let mut transaction = self.pool.begin().await?;
 
-        //TODO test attempt to create the same user twice
         transaction.execute("lock table users in exclusive mode;").await?;
 
         let username_exists: bool = transaction
@@ -191,7 +189,36 @@ impl DbAccess for Db {
         Ok(Some(user_id))
     }
 
+    async fn username(&self, user_id: &UserId) -> Result<Option<String>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn.fetch_optional(query(r#"
+            select username from users where user_id = $1
+        "#).bind(user_id)).await?;
+        Ok(res.map(|row| row.get(0)))
+    }
+
+    async fn user_id(&self, requested_username: &String) -> Result<Option<UserId>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn.fetch_optional(query(r#"
+            select user_id from users where username = $1
+        "#).bind(requested_username)).await?;
+        Ok(res.map(|row| row.get(0))) 
+    }
     
+    async fn find_chats(&self, search_query: &str) -> Result<Vec<ChatInfo>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn.fetch_all(query(r#"
+                select user_id, username from users where lower(username) like $1
+            "#).bind(format!("%{}%", search_query.to_lowercase()))).await?
+            .into_iter()
+            .map(|row| {
+                let id = row.get(0);
+                let username = row.get(1);
+                ChatInfo{ username, id }
+            })
+            .collect();
+        Ok(res)
+    }
 }
 
 //TODO possibly use Cow for optimization
