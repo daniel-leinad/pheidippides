@@ -62,6 +62,21 @@ impl<'a> HttpResponseBuilder<'a> {
         self.body = Some(body);
         self
     }
+
+    pub fn content_text(&mut self) -> &mut Self {
+        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "text/plain; charset=utf-8".to_owned());
+        self
+    }
+
+    pub fn content_html(&mut self) -> &mut Self {
+        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "text/html; charset=utf-8".to_owned());
+        self
+    }
+
+    pub fn content_json(&mut self) -> &mut Self {
+        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "application/json; charset=utf-8".to_owned());
+        self
+    }
 }
 
 pub enum HttpStatusCode {

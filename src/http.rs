@@ -121,14 +121,25 @@ impl Request {
             Response::Text{text, headers} => {
                 let mut builder = HttpResponseBuilder::new();
                 builder.body(&text);
+                builder.content_text();
                 for header in headers {
                     builder.header(header);
                 }
                 builder.build()
             },
-            Response::HtmlPage { content, headers } => {
+            Response::Html { content, headers } => {
                 let mut builder = HttpResponseBuilder::new();
                 builder.body(&content);
+                builder.content_html();
+                for header in headers {
+                    builder.header(header);
+                };
+                builder.build()
+            },
+            Response::Json { content, headers } => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.body(&content);
+                builder.content_json();
                 for header in headers {
                     builder.header(header);
                 };
@@ -166,12 +177,16 @@ impl Request {
 }
 
 pub enum Response {
-    HtmlPage {
+    Html {
         content: String,
         headers: Vec<Header>,
     },
     Text{
         text: String,
+        headers: Vec<Header>,
+    },
+    Json{
+        content: String,
         headers: Vec<Header>,
     },
     Redirect{

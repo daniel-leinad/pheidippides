@@ -42,6 +42,5 @@ pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat
         .rev()
         .collect();
     let json_messages = serde_json::json!(messages);
-    //TODO add special type for json responses?
-    Ok(Response::Text{text: json_messages.to_string(), headers: vec![]})
+    Ok(Response::Json{content: json_messages.to_string(), headers: vec![]})
 }

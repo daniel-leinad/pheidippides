@@ -155,7 +155,7 @@ async fn chat_page<D: DbAccess>(
         .replace("{chats}", &chats_html)
         .replace("{chat_id}", &chat_id.unwrap_or_default());
 
-    Ok(Response::HtmlPage {
+    Ok(Response::Html {
         content: chat_page,
         headers: Vec::new(),
     })
@@ -163,7 +163,7 @@ async fn chat_page<D: DbAccess>(
 
 async fn authorization_page() -> Result<Response> {
     let content = fs::load_template_as_string("login.html").await?;
-    Ok(Response::HtmlPage {
+    Ok(Response::Html {
         content,
         headers: Vec::new(),
     })
@@ -172,7 +172,7 @@ async fn authorization_page() -> Result<Response> {
 async fn signup_page() -> Result<Response> {
     let content = fs::load_template_as_string("signup.html").await?;
     let headers = vec![];
-    Ok(Response::HtmlPage { content , headers })
+    Ok(Response::Html { content , headers })
 }
 
 fn logout(request: &Request) -> Result<Response> {
@@ -257,7 +257,7 @@ async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<R
         Some(user_id) => user_id,
         None => {
             let signup_response = SignupResponse{ success: false, errors: vec![SignupError::UsernameTaken] };
-            return Ok(Response::Text{text: serde_json::json!(signup_response).to_string(), headers: vec![]})
+            return Ok(Response::Json{content: serde_json::json!(signup_response).to_string(), headers: vec![]})
         },
     };
 
@@ -268,7 +268,7 @@ async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<R
     let session_id = sessions::generate_session_id();
     let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
     sessions::update_session_info(session_id, sessions::SessionInfo{ user_id })?;
-    Ok(Response::Text{ text: signup_response.to_string(), headers })
+    Ok(Response::Json{ content: signup_response.to_string(), headers })
 }
 
 #[derive(Deserialize)]
@@ -301,12 +301,12 @@ async fn send_message<D: db::DbAccess>(request: &mut Request, db_access: D, rece
 
     db_access.create_message(params.message, &user_id, &receiver).await.with_context(|| format!("Couldn't create message from {user_id} to {receiver}"))?;
 
-    Ok(Response::HtmlPage { content: "ok.".to_owned(), headers: Vec::new() })
+    Ok(Response::Html { content: "ok.".to_owned(), headers: Vec::new() })
 }
 
 async fn failed_login_response() -> Result<Response> {
     let content = fs::load_template_as_string("login_fail.html").await?;
-    Ok(Response::HtmlPage {
+    Ok(Response::Html {
         content,
         headers: Vec::new(),
     })

@@ -24,7 +24,7 @@ pub async fn chats_html_response(request: &Request, db_access: impl db::DbAccess
         Some(user_id) => chats_html(&db_access, &user_id).await?,
         None => String::from("Unauthorized"),
     };
-    Ok(Response::Text{text: response_string, headers: vec![]})
+    Ok(Response::Html{content: response_string, headers: vec![]})
 }
 
 pub async fn chats_html(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String> {
@@ -58,6 +58,6 @@ pub async fn chatsearch_html(db_access: impl db::DbAccess, params: &str) -> Resu
         .intersperse("\n".to_owned())
         .collect();
 
-    Ok(Response::Text{text: chats_html, headers: vec![]})
+    Ok(Response::Html{content: chats_html, headers: vec![]})
 
 }
