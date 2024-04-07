@@ -9,3 +9,4 @@
 - Probably better to rename to and from columns in database
 - In chat.html there shouldn't be an option to send a message
 - Messages don't dynamically update on the client
+- Add text field to Response::BadRequest for clearer error messages

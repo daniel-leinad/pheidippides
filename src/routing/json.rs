@@ -5,9 +5,8 @@ use crate::http::{Request, Response};
 use serde::Deserialize;
 use super::{get_authorization, unauthorized_redirect};
 
-//TODO bad name
 #[derive(Deserialize, Debug)]
-struct MessagesParams {
+struct MessagesUrlParams {
     from: Option<String>,
 }
 
@@ -18,7 +17,7 @@ pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat
         Err(_) => return Ok(Response::BadRequest),
     };
 
-    let query_params: MessagesParams = match serde_form_data::from_str(params) {
+    let query_params: MessagesUrlParams = match serde_form_data::from_str(params) {
         Ok(res) => res,
         Err(_) => return Ok(Response::BadRequest),
     };
@@ -43,6 +42,6 @@ pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat
         .rev()
         .collect();
     let json_messages = serde_json::json!(messages);
-    //TODO add special type json?
+    //TODO add special type for json responses?
     Ok(Response::Text{text: json_messages.to_string(), headers: vec![]})
 }

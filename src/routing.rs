@@ -179,8 +179,7 @@ fn logout(request: &Request) -> Result<Response> {
     let headers = request.headers();
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
-        //TODO handle error?
-        Err(_) => return Ok(unauthorized_redirect()),
+        Err(_) => return Ok(Response::BadRequest),
     };
 
     let session_id = match cookies.get(sessions::SESSION_ID_COOKIE) {
