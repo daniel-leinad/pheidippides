@@ -6,7 +6,6 @@
 - HTTP 1/1 not fully implemented
 - Timing attacks (authorization fails faster with incorrect username)
 - Auth verification is blocking
-- Warning during build about rand_core
 - Probably better to rename to and from columns in database
 - In chat.html there shouldn't be an option to send a message
 - Messages don't dynamically update on the client
