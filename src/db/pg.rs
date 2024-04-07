@@ -156,11 +156,30 @@ impl DbAccess for Db {
     }
     
     async fn update_authentication(&self, user_id: &UserId, auth_info: super::AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
-        self.pool.acquire().await?.execute(query(r#"
-            insert into auth (user_id, phc_string) values ($1, $2)
-            "#).bind(user_id).bind(auth_info.phc_string.to_string())).await?;
-        //TODO return old auth info
-        Ok(None)
+        let mut transaction = self.pool.begin().await?;
+        transaction.execute(query("lock table auth in exclusive mode")).await?;
+        let old_auth = transaction.fetch_optional(query(
+                "select phc_string from auth where user_id = $1"
+            ).bind(user_id)).await?;
+
+        match old_auth {
+            Some(row) => {
+                let old_phc_string: &str = row.get(0);
+                let old_auth: AuthenticationInfo = old_phc_string.parse()?;
+                transaction.execute(query(
+                    "update auth set phc_string = $1 where user_id = $2"
+                ).bind(auth_info.phc_string().to_string()).bind(user_id)).await?;
+                transaction.commit().await?;
+                Ok(Some(old_auth))
+            },
+            None => {
+                transaction.execute(query(r#"
+                    insert into auth (user_id, phc_string) values ($1, $2)
+                    "#).bind(user_id).bind(auth_info.phc_string.to_string())).await?;
+                transaction.commit().await?;
+                Ok(None)
+            },
+        }
     }
     
     async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
