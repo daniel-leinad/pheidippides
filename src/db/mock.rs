@@ -176,10 +176,12 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn create_message(&self, message: String, from: &UserId, to: &UserId) -> Result<(), Error> {
+    async fn create_message(&self, message: String, from: &UserId, to: &UserId) -> Result<MessageId, Error> {
         let mut messages_lock = self.messages.lock()?;
+        let new_message = MessageRecord::new(*from, *to, &message);
+        let msg_id = new_message.id;
         messages_lock.push(MessageRecord::new(*from, *to, &message));
-        Ok(())
+        Ok(msg_id)
     }
     
     async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {

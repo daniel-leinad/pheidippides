@@ -28,8 +28,7 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
     fn users(&self) -> async_result!(Vec<(UserId, String)>);
     fn chats(&self, user_id: &UserId) -> async_result!(Vec<ChatInfo>);
     fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> async_result!(Vec<Message>);
-    //TODO return message_id
-    fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> async_result!(());
+    fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> async_result!(MessageId);
     fn authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
     fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
     fn create_user(&self, username: &str) -> async_result!(Option<UserId>);

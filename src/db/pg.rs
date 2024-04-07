@@ -122,7 +122,7 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<(), Self::Error> {
+    async fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<MessageId, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let message_id = Uuid::new_v4();
         let timestamp = Local::now();
@@ -136,7 +136,7 @@ impl DbAccess for Db {
             .bind(msg)
             .bind(timestamp))
             .await?;
-        Ok(())
+        Ok(message_id)
     }
     
     async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
