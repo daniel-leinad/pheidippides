@@ -1,13 +1,26 @@
 use anyhow::Result;
 use super::serde_form_data;
 use super::db::{self, MessageId, UserId};
+use crate::db::Message;
 use crate::http::{Request, Response};
-use serde::Deserialize;
-use super::{get_authorization, unauthorized_redirect};
+use serde::{Serialize, Deserialize};
+use super::get_authorization;
 
 #[derive(Deserialize, Debug)]
 struct MessagesUrlParams {
     from: Option<String>,
+}
+
+#[derive(Serialize)]
+struct MessagesResponse {
+    success: bool,
+    messages: Vec<Message>,
+    error: Option<MessageResponseError>,
+}
+
+#[derive(Serialize)]
+enum MessageResponseError {
+    Unauthorized,
 }
 
 pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat_id: &str, params: &str) -> Result<Response> {
@@ -33,7 +46,14 @@ pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat
     let headers = request.headers();
     let user_id = match get_authorization(headers)? {
         Some(res) => res,
-        None => return Ok(unauthorized_redirect()),
+        None => {
+            let response = MessagesResponse { 
+                success: false, 
+                messages: vec![], 
+                error: Some(MessageResponseError::Unauthorized),
+            };
+            return Ok(Response::Json { content: serde_json::json!(response).to_string(), headers: vec![] })
+        },
     };
 
     let messages: Vec<_> = db_access
@@ -41,6 +61,11 @@ pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat
         .into_iter()
         .rev()
         .collect();
-    let json_messages = serde_json::json!(messages);
-    Ok(Response::Json{content: json_messages.to_string(), headers: vec![]})
+    let response = MessagesResponse {
+        success: true,
+        messages,
+        error: None,
+    };
+    let json_response = serde_json::json!(response);
+    Ok(Response::Json{content: json_response.to_string(), headers: vec![]})
 }

@@ -44,7 +44,13 @@
     let response = await fetch("/json/messages/" + current_chat_id, {
       method: "GET"
     });
-    messagesBuffer = await response.json();
+    let response_body = await response.json();
+    if (response_body.success) {
+      messagesBuffer = response_body.messages;
+    } else {
+      handleFetchMessagesError(response_body.error);
+      return;
+    };
     noMoreOldMessages = false;
 
     redrawMessages(false);
@@ -73,8 +79,16 @@
     let response = await fetch(url, {method: "GET"});
 
     response_body = await response.json();
-    if (response_body.length) {
-      messagesBuffer = [...response_body, ...messagesBuffer];
+
+    if (!response_body.success) {
+      handleFetchMessagesError(response_body.error);
+      return;
+    };
+
+    let fetchedMessages = response_body.messages;
+
+    if (fetchedMessages.length) {
+      messagesBuffer = [...fetchedMessages, ...messagesBuffer];
     } else {
       noMoreOldMessages = true;
     }
@@ -122,6 +136,16 @@
     }
 
     messages.scrollTo(0, messages.scrollHeight - scrollFromBottom);
+  }
+
+  function handleFetchMessagesError(error) {
+    switch (error) {
+        case "Unauthorized":
+          location.href = "/login";
+          break;
+        default:
+          console.error("Unexpected error from /json/messages");
+      };
   }
 
   addEventListener("load", function (e) {

@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     let port = args.port;
     let addr = format!("{host}:{port}");
 
-    // let db_access = db::mock::Db::new();
+    // let db_access = db::mock::Db::new().await;
     let db_access = db::pg::Db::new("postgres://postgres:12345@localhost/pheidippides_test_1")?;
 
     let request_handler = routing::RequestHandler::new(db_access);
