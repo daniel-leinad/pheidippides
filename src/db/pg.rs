@@ -1,9 +1,15 @@
+use std::future::Future;
+use std::time::Duration;
+
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{Executor, Row, query};
+use tokio::task::JoinError;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use chrono::{DateTime, Local};
 use anyhow::{Context, Result, bail};
 use thiserror::Error;
+use tokio::signal;
 
 use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, MessageType, UserId, MessageId};
 
@@ -22,6 +28,17 @@ impl Db {
         let pool = sqlx::PgPool::connect_with(options).await?;
 
         Ok(Db { pool })
+    }
+
+    pub fn graceful_shutdown(&self, cancellation_token: CancellationToken) -> impl Future<Output = Result<(), JoinError>> {
+        let pool_cloned = self.pool.clone();
+        let res = tokio::spawn(async move {
+            cancellation_token.cancelled().await;
+            eprintln!("Shutting down database connection...");
+            pool_cloned.close().await;
+            eprintln!("Shutting down database connection...Success");
+        });
+        res
     }
 
     pub async fn check_migrations(&self) -> Result<()> {

@@ -4,6 +4,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{Result, Context};
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream};
+use tokio_util::sync::CancellationToken;
 
 use crate::utils::{self, CaseInsensitiveString};
 use http_response::{HttpResponseBuilder, HttpStatusCode};
@@ -203,18 +204,24 @@ pub trait RequestHandler: 'static + Send + Clone {
     fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send;
 }
 
-pub async fn run_server(addr: &str, request_handler: impl RequestHandler) -> Result<()> {
+pub async fn run_server(addr: &str, request_handler: impl RequestHandler, cancellation_token: CancellationToken) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     eprintln!("Started a server at {addr}");
 
     loop {
-        let (stream, _) = match listener.accept().await {
-            Ok(res) => res,
-            Err(e) => {
-                utils::log_internal_error(e);
-                continue;
+        let (stream, _) = tokio::select! {
+            _ = cancellation_token.cancelled() => {
+                eprintln!("Shutting down server...");
+                break;
             },
+            res = listener.accept() => match res {
+                Ok(res) => res,
+                Err(e) => {
+                    utils::log_internal_error(e);
+                    continue;
+                },
+            }
         };
 
         let request_handler = request_handler.clone();
@@ -241,4 +248,6 @@ pub async fn run_server(addr: &str, request_handler: impl RequestHandler) -> Res
             };
         });
     };
+    eprintln!("Shutting down server...Success");
+    Ok(())
 }
