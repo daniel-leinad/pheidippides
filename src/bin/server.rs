@@ -8,7 +8,7 @@ struct Args {
     #[arg(long)]
     host: String,
     #[arg(short, long)]
-    port: u8,
+    port: u32,
     #[arg(long, id="CONNECTION URL", help="Database conneciton url. Format: postgresql://[user[:password]@][host][:port][/dbname][?param1=value1&...]")]
     db: String,
 }
