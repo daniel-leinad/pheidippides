@@ -120,6 +120,9 @@
     };
 
     for (msg of messagesBuffer) {
+      let container = document.createElement("div");
+      container.setAttribute("class", "messageContainer");
+
       let el = document.createElement("div");
       switch (msg.type) {
         case "In":
@@ -133,8 +136,10 @@
       }
       let messageText = document.createTextNode(msg.message);
       el.appendChild(messageText);
+      
+      container.appendChild(el);
 
-      messages.appendChild(el);
+      messages.appendChild(container);
     }
 
     messages.scrollTo(0, messages.scrollHeight - scrollFromBottom);
@@ -220,10 +225,15 @@
   div.chat_container {
     display: grid;
     grid-template-columns: 20% auto 1rem;
-    grid-template-rows: 2rem 90%;
+    grid-template-rows: 2rem 80%;
     position: fixed;
     height: 100%;
     width: 100%;
+  }
+
+  div.chatSearch {
+    padding-bottom: 0.5rem;
+    padding-top: 0.5rem;
   }
 
   div.greeting {
@@ -239,15 +249,20 @@
   }
 
   div.chat {
+    padding: 1rem;
     user-select: none;
     cursor: pointer;
+    border-bottom: solid;
+    border-color: rgb(179, 200, 207);
   }
 
   div.currentChat {
-    border: solid;
-    border-color: gray;
+    padding: 1rem;
     user-select: none;
     cursor: pointer;
+    border-bottom: solid;
+    border-color: rgb(179, 200, 207);
+    background-color: rgb(241, 238, 220);
   }
 
   div.rightColumn {
@@ -258,7 +273,6 @@
   }
 
   div.rightColumn div {
-    display: block;
     width: 100%;
   }
 
@@ -267,8 +281,9 @@
   }
 
   div.messages {
-    display: grid;
     height: 100%;
+    width: 10rem;
+    display: block;
   }
 
   div.replyBox {
@@ -279,32 +294,61 @@
     display: inline;
   }
 
+  div.messageContainer {
+    width: 10rem;
+    display: grid;
+    grid-template-columns: auto 45% 7% 45% auto;
+    padding-bottom: 0.5rem;
+  }
+
   div.messageIn {
-    text-align: left;
+    grid-column: 2 / 4;
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+    border-bottom-right-radius: 0.5rem;
+    padding-top: 0.5rem;
+    padding-left: 0.5rem;
+    padding-bottom: 0.5rem;
+    background-color: rgb(241, 238, 220);
   }
 
   div.messageOut {
-    text-align: right;
+    grid-column: 3 / 5;
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+    border-bottom-left-radius: 0.5rem;
+    padding-top: 0.5rem;
+    padding-left: 0.5rem;
+    padding-bottom: 0.5rem;
+    background-color: rgb(241, 238, 220);
   }
 
   #loadMoreOldMessages {
     text-align: center;
     cursor: pointer;
-    color: grey;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    color: rgb(179, 200, 207);
   }
 
   #noMoreOldMessages {
     text-align: center;
     user-select: none;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
   }
 
-  div.messages div:hover {
-    background-color: beige;
+  /* div.messageIn:hover {
+    background-color: rgb(241, 238, 220);
+  }
+
+  div.messageOut:hover {
+    background-color: rgb(241, 238, 220);
   }
 
   div.chats div:hover {
-    background-color: beige;
-  }
+    background-color: rgb(241, 238, 220);
+  } */
 </style>
 
 <body>
@@ -312,8 +356,9 @@
     <div class="greeting">Привет, {{ username }} <a href="/logout">выйти</a></div>
     <div class="leftColumn">
       <div class="chatSearch">
-        <form name="chatSearchForm" action="javascript:void(0);">
-          <input type="text" name="chatSearchBox" id="chatSearchBox" style="width: 50%;" />
+        <form name="chatSearchForm" action="javascript:void(0);" autocomplete="off">
+          <input autocomplete="false" name="hidden" type="text" style="display:none;">
+          <input type="text" name="chatSearchBox" id="chatSearchBox" style="width: 50%;" autocomplete="off" />
           <button name="chatSearchButton" id="chatSearchButton">Поиск</button>
         </form>
       </div>
@@ -325,8 +370,9 @@
       <div class="messages scroll" id="messages">
       </div>
       <div class="replyBox" id="replyBox">
-        <form id="replyForm" action="javascript:void(0);" hidden>
-          <input type="text" name="message" style="width: 75%;" id="message_box" required />
+        <form id="replyForm" action="javascript:void(0);" autocomplete="off" hidden>
+          <input autocomplete="false" name="hidden" type="text" style="display:none;">
+          <input type="text" name="message" style="width: 75%;" id="message_box" autocomplete="off" required />
           <button id="send_button">Отправить</button>
         </form>
       </div>
