@@ -8,4 +8,4 @@
 - Add text field to Response::BadRequest for clearer error messages
 - Display current chat name at the top of the chat.html
 - Support for multiline messages
-- Wonky UI: does not readjust after changing size of the window
+- Wonky UI: does not readjust after changing size of the window, blank space at the bottom
