@@ -307,7 +307,7 @@
 
 <body>
   <div class="chat_container">
-    <div class="greeting">Привет, {username} <a href="/logout">выйти</a></div>
+    <div class="greeting">Привет, {{ username }} <a href="/logout">выйти</a></div>
     <div class="leftColumn">
       <div class="chatSearch">
         <form name="chatSearchForm" action="javascript:void(0);">
@@ -316,7 +316,7 @@
         </form>
       </div>
       <div class="chats scroll" id="chats">
-        {chats}
+        {% include "elements/chats.html" %}
       </div>
     </div>
     <div class="rightColumn">

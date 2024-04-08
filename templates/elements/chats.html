@@ -1,0 +1,3 @@
+{% for chat in chats %}
+    <div class="chat" id="chat_{{ chat.id }}" onclick="chatWith('{{ chat.id }}')">{{ chat.username }}</div>
+{% endfor %}

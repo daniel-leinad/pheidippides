@@ -8,4 +8,3 @@ mod serde_form_data;
 mod utils;
 mod sessions;
 pub mod routing;
-mod fs;

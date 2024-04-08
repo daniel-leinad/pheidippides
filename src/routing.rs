@@ -10,7 +10,6 @@ use crate::utils::CaseInsensitiveString;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use super::utils::{log_internal_error, get_cookies_hashmap, header_set_cookie};
-use crate::fs;
 
 #[derive(Clone)]
 pub struct RequestHandler<D: db::DbAccess> {
@@ -142,18 +141,7 @@ async fn chat_page<D: DbAccess>(
         None => return Ok(unauthorized_redirect()),
     };
 
-    let username = db_access
-        .username(&user_id).await.with_context(|| format!("Couldn't fetch username of {user_id}"))?
-        .context("Couldn't retrieve username from user_id stored SESSION_INFO")?;
-
-    let chat_page_template = fs::load_template_as_string("chat.html").await?;
-
-    let chats_html: String = html::chats_html(&db_access, &user_id).await?;
-
-    let chat_page = chat_page_template
-        .replace("{username}", &username)
-        .replace("{chats}", &chats_html)
-        .replace("{chat_id}", &chat_id.unwrap_or_default());
+    let chat_page = html::chat_page(&db_access, &user_id).await?;
 
     Ok(Response::Html {
         content: chat_page,
@@ -162,7 +150,7 @@ async fn chat_page<D: DbAccess>(
 }
 
 async fn authorization_page() -> Result<Response> {
-    let content = fs::load_template_as_string("login.html").await?;
+    let content = html::login_page()?;
     Ok(Response::Html {
         content,
         headers: Vec::new(),
@@ -170,7 +158,7 @@ async fn authorization_page() -> Result<Response> {
 }
 
 async fn signup_page() -> Result<Response> {
-    let content = fs::load_template_as_string("signup.html").await?;
+    let content = html::signup_page()?;
     let headers = vec![];
     Ok(Response::Html { content , headers })
 }
@@ -211,7 +199,8 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
 
     let user_id = match db_access
         .user_id(&authorization_params.login).await
-        .with_context(|| format!("Couldn't fetch user_id of {}", &authorization_params.login))? {
+        .with_context(|| format!("Couldn't fetch user_id of {}", &authorization_params.login))?
+    {
         Some(user_id) => user_id,
         None => return failed_login_response().await,
     };
@@ -305,7 +294,7 @@ async fn send_message<D: db::DbAccess>(request: &mut Request, db_access: D, rece
 }
 
 async fn failed_login_response() -> Result<Response> {
-    let content = fs::load_template_as_string("login_fail.html").await?;
+    let content = html::login_fail_page()?;
     Ok(Response::Html {
         content,
         headers: Vec::new(),
