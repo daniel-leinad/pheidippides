@@ -8,3 +8,4 @@
 - Messages don't dynamically update on the client
 - Add text field to Response::BadRequest for clearer error messages
 - Display current chat name at the top of the chat.html
+- HTML pages templates aren't seen when you run server from a debug/release build directory
