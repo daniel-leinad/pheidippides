@@ -42,7 +42,7 @@ impl Db {
     pub async fn check_migrations(&self) -> Result<()> {
         let migrations_table_exists: bool = self.pool
             .acquire().await?
-            .fetch_one(query("select exists (select from pg_tables where schemaname = 'public' and tablename = '_sqlx_migrations')"))
+            .fetch_one(query("select exists (select from pg_tables where (schemaname = 'public') and (tablename = '_sqlx_migrations'))"))
             .await?
             .get(0);
 
@@ -136,21 +136,22 @@ impl DbAccess for Db {
         query_builder.push(r#"
             select id, receiver, message
             from messages
-            where (receiver = "#).push_bind(this)
+            where ((receiver = "#).push_bind(this)
         .push(" and sender = ").push_bind(other)
         .push(") or (receiver = ").push_bind(other)
         .push(" and sender = ").push_bind(this)
-        .push(")");
+        .push("))");
         
         if let Some(starting_point) = starting_point {
-            let timestamp = conn
+            let msg_timestamp = conn
                 .fetch_optional(query("select timestamp from messages where id = $1").bind(starting_point)).await?;
             //TODO possibly handle case when timestamp is none
-            if let Some(pg_row) = timestamp {
-                let timestamp: DateTime<Local> = pg_row.get(0);
+            if let Some(pg_row) = msg_timestamp {
+                let msg_timestamp: DateTime<Local> = pg_row.get(0);
                 query_builder
-                    .push(" and timestamp <= ").push_bind(timestamp)
-                    .push(" and id < ").push_bind(starting_point);
+                    .push(" and (timestamp <= ").push_bind(msg_timestamp)
+                    .push(") and (id < ").push_bind(starting_point)
+                    .push(")");
             }
         }
 
