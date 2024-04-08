@@ -35,14 +35,17 @@ impl Db {
             bail!("Database uninitialized. Please migrate database using the 'migrate' tool");
         }
         
-        let current_version_exists: bool = self.pool
+        let latest_version: i64 = self.pool
             .acquire().await?
-            .fetch_one(query("select exists (select 1 from _sqlx_migrations where version = $1)").bind(DB_VERSION))
+            .fetch_optional(query("select version from _sqlx_migrations order by version desc limit 1"))
             .await?
-            .get(0);
+            .map(|row| row.get(0))
+            .unwrap_or(-1);
 
-        if !current_version_exists {
+        if latest_version < DB_VERSION {
             bail!("Database schema not up to date. Please migrate database using the 'migrate' tool")
+        } else if latest_version > DB_VERSION {
+            bail!("Application not up to date with the database. Please use a newer version of the app or undo database migrations until version {}", DB_VERSION)
         };
 
         Ok(())
