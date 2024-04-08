@@ -2,12 +2,14 @@ use sqlx::postgres::PgConnectOptions;
 use sqlx::{Executor, Row, query};
 use uuid::Uuid;
 use chrono::{DateTime, Local};
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use thiserror::Error;
 
 use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, MessageType, UserId, MessageId};
 
 const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
+const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
+const DB_VERSION: i64 = 2;
 
 #[derive(Clone)]
 pub struct Db {
@@ -15,10 +17,39 @@ pub struct Db {
 }
 
 impl Db {
-    pub fn new(connection_string: &str) -> Result<Self> {
+    pub async fn new(connection_string: &str) -> Result<Self> {
         let options: PgConnectOptions = connection_string.parse()?;
-        let pool = sqlx::PgPool::connect_lazy_with(options);
+        let pool = sqlx::PgPool::connect_with(options).await?;
+
         Ok(Db { pool })
+    }
+
+    pub async fn check_migrations(&self) -> Result<()> {
+        let migrations_table_exists: bool = self.pool
+            .acquire().await?
+            .fetch_one(query("select exists (select from pg_tables where schemaname = 'public' and tablename = '_sqlx_migrations')"))
+            .await?
+            .get(0);
+
+        if !migrations_table_exists {
+            bail!("Database uninitialized. Please migrate database using the 'migrate' tool");
+        }
+        
+        let current_version_exists: bool = self.pool
+            .acquire().await?
+            .fetch_one(query("select exists (select 1 from _sqlx_migrations where version = $1)").bind(DB_VERSION))
+            .await?
+            .get(0);
+
+        if !current_version_exists {
+            bail!("Database schema not up to date. Please migrate database using the 'migrate' tool")
+        };
+
+        Ok(())
+    }
+
+    pub async fn migrate(&self) -> Result<()> {
+        MIGRATOR.run(&self.pool).await.context("Couldn't migrate")
     }
 }
 

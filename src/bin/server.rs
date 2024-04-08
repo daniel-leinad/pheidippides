@@ -1,17 +1,7 @@
-#![feature(slice_split_once)]
-#![feature(iter_intersperse)]
-
-mod authorization;
-mod db;
-mod http;
-mod serde_form_data;
-mod utils;
-mod sessions;
-mod routing;
-mod fs;
-
 use anyhow::{Context, Result};
 use clap::Parser;
+
+use pheidippides::{db, routing, http};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -19,6 +9,8 @@ struct Args {
     host: String,
     #[arg(short, long)]
     port: u8,
+    #[arg(long, id="CONNECTION URL", help="Database conneciton url. Format: postgresql://[user[:password]@][host][:port][/dbname][?param1=value1&...]")]
+    db: String,
 }
 
 #[tokio::main]
@@ -27,9 +19,10 @@ async fn main() -> Result<()> {
     let host = args.host;
     let port = args.port;
     let addr = format!("{host}:{port}");
+    let db_connection = args.db;
 
-    // let db_access = db::mock::Db::new().await;
-    let db_access = db::pg::Db::new("postgres://postgres:12345@localhost/pheidippides_test_1")?;
+    let db_access = db::pg::Db::new(&db_connection).await?;
+    db_access.check_migrations().await?;
 
     let request_handler = routing::RequestHandler::new(db_access);
 
