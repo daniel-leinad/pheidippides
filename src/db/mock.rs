@@ -213,7 +213,7 @@ impl DbAccess for Db {
     async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
         let mut table_locked = self.users.lock()?;
 
-        if table_locked.iter().filter(|record| record.1 == username).next().is_some() {
+        if table_locked.iter().filter(|record| record.1.to_lowercase() == username.to_lowercase()).next().is_some() {
             return Ok(None)
         };
 

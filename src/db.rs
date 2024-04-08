@@ -49,7 +49,7 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
             let res = self
                 .users().await?
                 .into_iter()
-                .filter_map(|(id, username)| {if &username == requested_username {Some(id)} else {None}})
+                .filter_map(|(id, username)| {if username.to_lowercase() == requested_username.to_lowercase() {Some(id)} else {None}})
                 .next();
             Ok(res)
         }

@@ -221,8 +221,8 @@ impl DbAccess for Db {
 
         let username_exists: bool = transaction
             .fetch_one(query(r#"
-                select exists(select 1 from users where username = $1)
-            "#).bind(username)).await?.get(0);
+                select exists(select 1 from users where lower(username) = $1)
+            "#).bind(username.to_lowercase())).await?.get(0);
         
         if username_exists {
             return Ok(None);
@@ -248,8 +248,8 @@ impl DbAccess for Db {
     async fn user_id(&self, requested_username: &String) -> Result<Option<UserId>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_optional(query(r#"
-            select user_id from users where username = $1
-        "#).bind(requested_username)).await?;
+            select user_id from users where lower(username) = $1
+        "#).bind(requested_username.to_lowercase())).await?;
         Ok(res.map(|row| row.get(0))) 
     }
     
