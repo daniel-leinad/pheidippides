@@ -130,7 +130,7 @@ fn main_page(request: &Request) -> Result<Response> {
 async fn chat_page<D: DbAccess>(
     request: &Request,
     db_access: D,
-    chat_id: Option<&str>,
+    _chat_id: Option<&str>,
 ) -> Result<Response> {
     
 

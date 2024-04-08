@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::time::Duration;
 
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{Executor, Row, query};
@@ -9,7 +8,6 @@ use uuid::Uuid;
 use chrono::{DateTime, Local};
 use anyhow::{Context, Result, bail};
 use thiserror::Error;
-use tokio::signal;
 
 use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, MessageType, UserId, MessageId};
 
