@@ -23,8 +23,10 @@
       // must exist
       document.getElementById("chat_" + current_chat_id).setAttribute("class", "currentChat");
       loadMessages();
+      document.getElementById("replyForm").toggleAttribute("hidden", false);
     } else {
       document.getElementById("messages").innerHTML = "";
+      document.getElementById("replyForm").toggleAttribute("hidden", true);
     };
     document.getElementById("message_box").value = "";
   }
@@ -323,7 +325,7 @@
       <div class="messages scroll" id="messages">
       </div>
       <div class="replyBox" id="replyBox">
-        <form id="replyForm" action="javascript:void(0);">
+        <form id="replyForm" action="javascript:void(0);" hidden>
           <input type="text" name="message" style="width: 75%;" id="message_box" required />
           <button id="send_button">Отправить</button>
         </form>
