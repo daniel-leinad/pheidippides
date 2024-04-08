@@ -229,8 +229,8 @@ pub async fn run_server(addr: &str, request_handler: impl RequestHandler, cancel
         tokio::spawn(async move {
             let mut request = match Request::try_from_stream(stream).await {
                 Ok(req) => req,
-                Err(e) => {
-                    utils::log_internal_error(e);
+                Err(_) => {
+                    // silently ignore all incorrect TCP connections
                     return;
                 },
             };
