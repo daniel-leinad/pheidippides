@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use crate::{db::ChatInfo, serde_form_data};
 use super::db::{self, UserId};
+use crate::app::App;
 use crate::http::{Request, Response};
 use serde::Deserialize;
 use super::get_authorization;
@@ -31,14 +32,14 @@ struct SignUpPage {}
 #[template(path = "login_fail.html")]
 struct LoginFailPage {}
 
-pub async fn chat_page(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String> {
-    let username = db_access
-        .username(&user_id).await.with_context(|| format!("Couldn't fetch username of {user_id}"))?
-        .context("Couldn't retrieve username from user_id stored SESSION_INFO")?;
+pub async fn chat_page(app: &App<impl db::DbAccess>, user_id: &UserId) -> Result<String> {
+    let username = app
+         .username(&user_id).await?
+         .with_context(|| format!("Incorrect user id: {user_id}"))?;
+    
+    let users_chats = app.fetch_users_chats(user_id).await?;
 
-    let chats = fetch_users_chats(db_access, user_id).await?;
-
-    ChatPage{ username: &username, chats: chats }.render().context("Could not render chat.html")
+    ChatPage{ username: &username, chats: users_chats }.render().context("Could not render chat.html")
 }
 
 pub fn login_page() -> Result<String> {
@@ -53,18 +54,18 @@ pub fn login_fail_page() -> Result<String> {
     LoginFailPage{}.render().context("Could not render login_fail.html")
 }
 
-pub async fn chats_html_response(request: &Request, db_access: impl db::DbAccess) -> Result<Response> {
+pub async fn chats_html_response(request: &Request, app: App<impl db::DbAccess>) -> Result<Response> {
     let headers = request.headers();
     let authorization = get_authorization(headers)?;
     let response_string = match authorization {
-        Some(user_id) => chats_html(&db_access, &user_id).await?,
+        Some(user_id) => chats_html(&app, &user_id).await?,
         None => String::from("Unauthorized"),
     };
     Ok(Response::Html{content: response_string, headers: vec![]})
 }
 
-pub async fn chats_html(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<String> {
-    let chats = fetch_users_chats(db_access, user_id).await?;
+pub async fn chats_html(app: &App<impl db::DbAccess>, user_id: &UserId) -> Result<String> {
+    let chats = app.fetch_users_chats(user_id).await?;
     Ok(ChatHtmlElements{ chats }.render().context("Could not render elements/chats.html")?)
 }
 
@@ -73,26 +74,17 @@ struct ChatSearchParams {
     query: String,
 }
 
-pub async fn chatsearch_html(db_access: impl db::DbAccess, params: &str) -> Result<Response> {
+pub async fn chatsearch_html(app: App<impl db::DbAccess>, params: &str) -> Result<Response> {
 
     let search_params: ChatSearchParams = match serde_form_data::from_str(params) {
         Ok(res) => res,
         Err(_) => return Ok(Response::Empty),
     };
 
-    let chats = db_access
-        .find_chats(&search_params.query).await
-        .with_context(|| format!("Could't find chats with query {}", &search_params.query))?;
+    let chats = app.find_chats(&search_params.query).await?;
 
     let chats_html = ChatHtmlElements{chats}.render()?;
 
     Ok(Response::Html{content: chats_html, headers: vec![]})
 
-}
-
-async fn fetch_users_chats(db_access: &impl db::DbAccess, user_id: &UserId) -> Result<Vec<ChatInfo>> {
-    let chats = db_access
-            .chats(user_id).await
-            .with_context(|| format!("Couldn't fetch chats for user {user_id}"))?;
-    Ok(chats)
 }

@@ -3,6 +3,7 @@ use super::serde_form_data;
 use super::db::{self, MessageId, UserId};
 use crate::db::Message;
 use crate::http::{Request, Response};
+use crate::app::App;
 use serde::{Serialize, Deserialize};
 use super::get_authorization;
 
@@ -23,7 +24,7 @@ enum MessageResponseError {
     Unauthorized,
 }
 
-pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat_id: &str, params: &str) -> Result<Response> {
+pub async fn messages_json(request: &Request, app: App<impl db::DbAccess>, chat_id: &str, params: &str) -> Result<Response> {
 
     let chat_id: UserId = match chat_id.parse() {
         Ok(chat_id) => chat_id,
@@ -56,11 +57,12 @@ pub async fn messages_json(request: &Request, db_access: impl db::DbAccess, chat
         },
     };
 
-    let messages: Vec<_> = db_access
-        .last_messages(&user_id, &chat_id.to_owned(), starting_from).await?
+    let messages: Vec<_> = app
+        .fetch_last_messages(&user_id, &chat_id, starting_from).await?
         .into_iter()
         .rev()
         .collect();
+    
     let response = MessagesResponse {
         success: true,
         messages,

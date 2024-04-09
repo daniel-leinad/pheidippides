@@ -172,7 +172,7 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<MessageId, Self::Error> {
+    async fn create_message(&self, msg: &str, from: &UserId, to: &UserId) -> Result<MessageId, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let message_id = Uuid::new_v4();
         let timestamp = Local::now();
@@ -264,7 +264,7 @@ impl DbAccess for Db {
         Ok(res.map(|row| row.get(0)))
     }
 
-    async fn user_id(&self, requested_username: &String) -> Result<Option<UserId>, Error> {
+    async fn user_id(&self, requested_username: &str) -> Result<Option<UserId>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_optional(query(r#"
             select user_id from users where lower(username) = $1
