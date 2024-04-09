@@ -81,3 +81,7 @@ Client-side was tested on Google Chrome (123.0.6312.106) and Mozilla Firefox (12
 ![](images/search_form_screenshot.png)
 5. If all is good, your page should look something like this:
 ![](images/ui_screenshot.png)
+
+# Issues
+
+All discovered issues are documented in the GitHub issues
