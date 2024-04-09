@@ -4,7 +4,7 @@ A simple messenger in a form of a web application.
 
 This is mostly an experimental project for the purpose of self-education. This is still a work-in-progress.
 
-Written in Rust, it consists of 2 executables: **server** for starting the server and **migrate** for managing migrations and uses **PostgreSQL** as backend.
+Written in Rust, it consists of 2 executables: **server** for starting the server and **migrate** for managing migrations. The app uses **PostgreSQL** as its backend.
 
 A lot of things that were done would have been unnecessary/shouldn't have been done at all in "real" production code, like writing the handling of HTTP requests from scratch and implementing my own authentication system. Creating a custom deserializer for parsing form-data is probably overkill as well.
 
