@@ -21,7 +21,7 @@ Web server - responsible for handling requests and client rendering (pheidippide
 ↓
 Database access - talks to the database: responsible for reading and modifying stored data (pheidippides::db)
 ↓
-DBMS (Postgres) - database itself
+DBMS (Postgres) - the database itself
 ```
 
 (I intend to expand it in the future by adding an Application layer between the Web server layer and the Database access layer):
