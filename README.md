@@ -75,7 +75,7 @@ Open browser and enter host and port that you specified when starting the server
 Client-side was tested on Google Chrome (123.0.6312.106) and Mozilla Firefox (124.0.1)
 
 1. To start messaging you need to create at least 2 different accounts
-2. After logging in, server remembers your session id so that you don't need to input login and password for the second time (unless you explicitly log out). Session ids are stored in memory, so you'll need to reenter credentials if you restart the server
+2. After logging in, the server remembers your session id so that you don't need to input login and password for the second time (unless you explicitly log out). Session ids are stored in memory, so you'll need to reenter credentials if you restart the server
 3. After succesful login or signup, you'll be redirected to the `/chat` page. Initially it will be empty because you haven't sent or received any messages so far.
 4. To start messaging, search for other accounts using the search form:
 ![](images/search_form_screenshot.png)
