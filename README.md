@@ -78,6 +78,6 @@ Client-side was tested on Google Chrome (123.0.6312.106) and Mozilla Firefox (12
 2. After logging in, server remembers your session id so that you don't need to input login and password for the second time (unless you explicitly log out). Session ids are stored in memory, so you'll need to reenter credentials if you restart the server
 3. After succesful login or signup, you'll be redirected to the `/chat` page. Initially it will be empty because you haven't sent or received any messages so far.
 4. To start messaging, search for other accounts using the search form:
-![](images\search_form_screenshot.png)
+![](images/search_form_screenshot.png)
 5. If all is good, your page should look something like this:
-![](images\ui_screenshot.png)
+![](images/ui_screenshot.png)
