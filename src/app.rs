@@ -3,7 +3,8 @@ use crate::utils::log_internal_error;
 use anyhow::{Context, Result, bail};
 use crate::authorization;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
+use std::time::Duration;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 #[derive(Clone)]
@@ -18,7 +19,34 @@ pub enum UserCreationError {
 
 impl<D: DbAccess> App<D> {
     pub fn new(db_access: D) -> Self {
-        let new_messages_subscriptions = Arc::new(RwLock::new(HashMap::new()));
+        let new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Vec<UnboundedSender<Message>>>>>  = Arc::new(RwLock::new(HashMap::new()));
+
+        let new_messages_subscriptions_cloned = new_messages_subscriptions.clone();
+
+        // Background job that periodically removes unused subscriptions from the hashtable to save space
+        tokio::spawn(async move {
+            loop {
+                //TODO parametrize sleep time
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                match new_messages_subscriptions_cloned.write() {
+                    Ok(mut write_lock) => {
+                        for (_, user_subscriptions) in write_lock.iter_mut() {
+                            *user_subscriptions = user_subscriptions
+                                .drain(..)
+                                .filter(|subscription| !subscription.is_closed())
+                                .collect();
+                        };
+
+                        write_lock.retain(|_, subscriptions| subscriptions.len() > 0);
+                        write_lock.shrink_to_fit();
+
+                        eprintln!("Chore done!");
+                    },
+                    Err(e) => log_internal_error(e),
+                }
+            }
+        });
+        
         App { db_access, new_messages_subscriptions }
     }
 
@@ -75,38 +103,49 @@ impl<D: DbAccess> App<D> {
             timestamp: chrono::Utc::now(),
         };
 
-        let message_id = self.db_access
+        self.db_access
             .create_message(&message).await
             .with_context(|| format!("Couldn't create message from {from} to {to}"))?;
 
-        match self.new_messages_subscriptions.read() {
-            Ok(subscriptions_read) => {
-                let mut informational_hash_map = HashMap::new();
-                for (key, value) in subscriptions_read.iter() {
-                    informational_hash_map.insert(key, value.len());
-                }
-                eprintln!("{informational_hash_map:?}");
-
-                if let Some(subscriptions) = subscriptions_read.get(&from) {
-                    for subscription in subscriptions {                    
-                        subscription.send(message.clone());
-                    }
-                };
-
-                if from != to {
-                    if let Some(subscriptions) = subscriptions_read.get(&to) {
-                        for subscription in subscriptions {                    
-                            subscription.send(message.clone());
-                        }
-                    };
-                }
-            },
-            Err(e) => {
-                log_internal_error(e);
-            },
-        }
+        if let Err(e) = self.handle_message_subscription(&message) {
+            log_internal_error(e);
+        };
 
         Ok(message.id)
+    }
+
+    fn handle_message_subscription(&self, message: &Message) -> Result<()> {
+        let subscriptions_read = match self.new_messages_subscriptions.read() {
+            Ok(read_lock) => read_lock,
+            Err(e) => bail!("Could not lock new_messages_subscriptions for read: {e}"),
+        };
+        let mut informational_hash_map = HashMap::new();
+        for (key, value) in subscriptions_read.iter() {
+            informational_hash_map.insert(key, value.len());
+        }
+        eprintln!("{informational_hash_map:?}");
+
+        if let Some(subscriptions) = subscriptions_read.get(&message.from) {
+            Self::send_event_to_subscribers(subscriptions, message)
+                    .with_context(|| format!("Couldn't send subscription events for {}", &message.from))?;
+        };
+
+        if message.from != message.to {
+            if let Some(subscriptions) = subscriptions_read.get(&message.to) {
+                Self::send_event_to_subscribers(subscriptions, message)
+                    .with_context(|| format!("Couldn't send subscription events for {}", &message.to))?;
+            };
+        };
+
+        Ok(())
+    }
+
+    fn send_event_to_subscribers<T: Clone>(subscriptions: &Vec<UnboundedSender<T>>, event: &T) -> Result<()> {
+        for subscription in subscriptions {                    
+            let _ = subscription.send(event.clone()); // ignore if channel is closed, subscription will be removed by a background job
+        }
+
+        Ok(())
     }
 
     pub async fn find_chats(&self, query: &str) -> Result<Vec<ChatInfo>> {
@@ -128,8 +167,9 @@ impl<D: DbAccess> App<D> {
             Ok(res) => res,
             Err(e) => bail!("Could not lock new_messages_subscriptions for write: {e}"),
         };
-            
+
         subscriptions_lock.entry(user_id).or_insert(vec![]).push(sender);
+
         match starting_point {
             None => Ok(receiver), // no extra channel needed, simply receive new messages
             Some(starting_point) => { todo!() }

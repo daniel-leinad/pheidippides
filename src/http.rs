@@ -2,11 +2,11 @@ mod http_response;
 
 use std::{collections::HashMap, str::FromStr};
 
-use anyhow::{Result, Context};
-use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream};
+use anyhow::{Result, Context, bail};
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream, sync::mpsc::UnboundedReceiver};
 use tokio_util::sync::CancellationToken;
 
-use crate::utils::{self, CaseInsensitiveString};
+use crate::utils::{self, log_internal_error, CaseInsensitiveString};
 use http_response::{HttpResponseBuilder, HttpStatusCode};
 
 pub type Header = (CaseInsensitiveString, String);
@@ -155,37 +155,9 @@ impl Request {
                 }
                 builder.build()
             },
-            Response::EventSource { retry, mut stream } => {
+            Response::EventSource { retry, stream } => {
                 tokio::spawn(async move {
-                    let http_response = HttpResponseBuilder::new()
-                        .content_event_stream()
-                        .build();
-                    writer.write_all(&http_response.into_bytes()).await?;
-                    if let Some(retry_value) = retry {
-                        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
-                    };
-                    writer.flush().await?;
-                    loop {
-                        match stream.recv().await {
-                            Some(event) => {
-                                let mut response_str = String::new();
-                                if let Some(event_type) = event.event {
-                                    response_str.push_str(&format!("event: {}\n", event_type));
-                                }
-                                for line in event.data.lines() {
-                                    response_str.push_str(&format!("data: {line}\n"))
-                                };
-                                response_str.push_str(&format!("id: {}\n", event.id));
-                                response_str.push_str("\n");
-
-                                writer.write_all(response_str.as_bytes()).await?;
-                                writer.flush().await?;
-                            },
-                            None => break,
-                        }
-                    };
-                    
-                    Result::<()>::Ok(())
+                    let _ = handle_event_stream(writer, retry, stream).await; // Error means client has disconnected, ignore
                 });
                 return Ok(());
             },
@@ -294,5 +266,49 @@ pub async fn run_server(addr: &str, request_handler: impl RequestHandler, cancel
         });
     };
     eprintln!("Shutting down server...Success");
+    Ok(())
+}
+
+async fn handle_event_stream<W: tokio::io::AsyncWriteExt + Unpin>(mut writer: W, retry: Option<i32>, mut stream: UnboundedReceiver<EventSourceEvent>) -> Result<()> {
+    let http_response = HttpResponseBuilder::new()
+        .content_event_stream()
+        .build();
+
+    writer.write_all(&http_response.into_bytes()).await?;
+
+    if let Some(retry_value) = retry {
+        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
+    };
+
+    writer.flush().await?;
+    loop {
+        // check that connection is still active by flushing an empty buffer.
+        if let Err(e) = writer.flush().await {
+            // connection was closed from the client, close and drain the channel and quit
+            eprintln!("Connection error: {e}");
+            stream.close();
+            while stream.recv().await.is_some() {};
+            bail!("{e}");
+        };
+
+        match stream.recv().await {
+            Some(event) => {
+                let mut response_str = String::new();
+                if let Some(event_type) = event.event {
+                    response_str.push_str(&format!("event: {}\n", event_type));
+                }
+                for line in event.data.lines() {
+                    response_str.push_str(&format!("data: {line}\n"))
+                };
+                response_str.push_str(&format!("id: {}\n", event.id));
+                response_str.push_str("\n");
+
+                writer.write_all(response_str.as_bytes()).await?;
+                writer.flush().await?;
+            },
+            None => break,
+        }
+    };
+
     Ok(())
 }
