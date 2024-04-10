@@ -294,7 +294,7 @@ async fn subscribe_new_messages(request: &Request, app: App<impl DbAccess>) -> R
                 None => break,
             };
             let event_source_event = EventSourceEvent { 
-                data: format!("{}\nlalalal", serde_json::json!(message)),
+                data: serde_json::json!(message).to_string(),
                 id: message.id.to_string(), 
                 event: None,
             };

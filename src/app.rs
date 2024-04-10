@@ -129,7 +129,10 @@ impl<D: DbAccess> App<D> {
         };
             
         subscriptions_lock.entry(user_id).or_insert(vec![]).push(sender);
-        Ok(receiver)
+        match starting_point {
+            None => Ok(receiver), // no extra channel needed, simply receive new messages
+            Some(starting_point) => { todo!() }
+        }
     }
 
     async fn user_id(&self, username: &str) -> Result<Option<UserId>> {

@@ -178,8 +178,19 @@
       // });
 
       eventSource.onmessage = function(e) {
-          console.log("Событие: message, данные: " + e.data);
+          let message = JSON.parse(e.data);
+          let messageChatId = (message.from === userId() ? message.to : message.from )
+          if ((messageChatId !== current_chat_id) && (messageChatId !== current_chat_id)) {
+            return;
+          }
+          messagesBuffer.push(message);
+          redrawMessages(false);
       };
+  }
+
+  function userId() {
+    //TODO questionable solution
+    return document.getElementById("userId").innerText;
   }
 
   addEventListener("load", function (e) {
@@ -192,16 +203,18 @@
         return;
       }
 
+      let message_text = document.getElementById("message_box").value;
+
       await fetch("/message/" + current_chat_id, {
         method: "POST",
         body: JSON.stringify({
-          message: document.getElementById("message_box").value
+          message: message_text
         })
       });
 
       document.getElementById("message_box").value = "";
 
-      loadMessages();
+      // loadMessages();
     });
 
     document.getElementById("chatSearchButton").addEventListener("click", async function () {
@@ -381,6 +394,7 @@
 </style>
 
 <body>
+  <div id="userId" hidden>{{ user_id }}</div>
   <div class="chat_container">
     <div class="greeting">Привет, {{ username }} <a href="/logout">выйти</a></div>
     <div class="leftColumn">

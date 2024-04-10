@@ -11,6 +11,7 @@ use askama::Template;
 #[template(path = "chat.html")]
 struct ChatPage<'a> {
     username: &'a str,
+    user_id: &'a UserId,
     chats: Vec<ChatInfo>,
 }
 
@@ -39,7 +40,7 @@ pub async fn chat_page(app: &App<impl db::DbAccess>, user_id: &UserId) -> Result
     
     let users_chats = app.fetch_users_chats(user_id).await?;
 
-    ChatPage{ username: &username, chats: users_chats }.render().context("Could not render chat.html")
+    ChatPage{ username: &username, user_id, chats: users_chats }.render().context("Could not render chat.html")
 }
 
 pub fn login_page() -> Result<String> {
