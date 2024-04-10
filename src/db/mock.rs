@@ -151,7 +151,7 @@ impl DbAccess for Db {
         Ok(res)
     }
 
-    async fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
+    async fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
         let res = self.messages.lock()?.iter()
             .rev()
             .skip_while(|msg_record| match &starting_point {
@@ -160,12 +160,9 @@ impl DbAccess for Db {
             })
             .skip(if starting_point.is_some() {1} else {0})
             .filter_map(|msg_record| {
-                if &msg_record.from == this && &msg_record.to == other {
-                    // Some(Message::Out(msg_record.id.clone(), msg_record.message.clone()))
-                    Some(Message { id: msg_record.id.clone(), message_type: MessageType::Out, message: msg_record.message.clone() })
-                } else if &msg_record.from == other && &msg_record.to == this {
-                    // Some(Message::In(msg_record.id.clone(), msg_record.message.clone()))
-                    Some(Message { id: msg_record.id.clone(), message_type: MessageType::In, message: msg_record.message.clone() })
+                if (&msg_record.from == user_id_1 && &msg_record.to == user_id_2)
+                    || (&msg_record.from == user_id_2 && &msg_record.to == user_id_1) {
+                    Some(Message { id: msg_record.id, from: msg_record.from, to: msg_record.to, message: msg_record.message.to_owned() })
                 } else {
                     None
                 }

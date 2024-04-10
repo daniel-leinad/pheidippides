@@ -155,6 +155,40 @@ impl Request {
                 }
                 builder.build()
             },
+            Response::EventSource { retry, mut stream } => {
+                tokio::spawn(async move {
+                    let http_response = HttpResponseBuilder::new()
+                        .content_event_stream()
+                        .build();
+                    writer.write_all(&http_response.into_bytes()).await?;
+                    if let Some(retry_value) = retry {
+                        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
+                    };
+                    writer.flush().await?;
+                    loop {
+                        match stream.recv().await {
+                            Some(event) => {
+                                let mut response_str = String::new();
+                                if let Some(event_type) = event.event {
+                                    response_str.push_str(&format!("event: {}\n", event_type));
+                                }
+                                for line in event.data.lines() {
+                                    response_str.push_str(&format!("data: {line}\n"))
+                                };
+                                response_str.push_str(&format!("id: {}\n", event.id));
+                                response_str.push_str("\n");
+
+                                writer.write_all(response_str.as_bytes()).await?;
+                                writer.flush().await?;
+                            },
+                            None => break,
+                        }
+                    };
+                    
+                    Result::<()>::Ok(())
+                });
+                return Ok(());
+            },
             Response::BadRequest => {
                 HttpResponseBuilder::new()
                     .status(HttpStatusCode::BadRequest)
@@ -194,9 +228,20 @@ pub enum Response {
         location: String, 
         headers: Vec<Header>
     },
+    EventSource{
+        retry: Option<i32>,
+        stream: tokio::sync::mpsc::UnboundedReceiver<EventSourceEvent>,
+    },
     BadRequest,
     InternalServerError,
     Empty,
+}
+
+#[derive(Debug)]
+pub struct EventSourceEvent {
+    pub data: String,
+    pub id: String,
+    pub event: Option<String>,
 }
 
 pub trait RequestHandler: 'static + Send + Clone {

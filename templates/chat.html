@@ -124,16 +124,12 @@
       container.setAttribute("class", "messageContainer");
 
       let el = document.createElement("div");
-      switch (msg.type) {
-        case "In":
-          el.setAttribute("class", "messageIn");
-          break;
-        case "Out":
-          el.setAttribute("class", "messageOut");
-          break;
-        default:
-          console.error("Unexpected message type: " + msg.type);
+      if (msg.to === current_chat_id) {
+        el.setAttribute("class", "messageOut");
+      } else {
+        el.setAttribute("class", "messageIn")
       }
+
       let messageText = document.createTextNode(msg.message);
       el.appendChild(messageText);
       
@@ -155,8 +151,41 @@
       };
   }
 
+  function setUpEventSource() {
+      if (!window.EventSource) {
+          // Internet Explorer или устаревшие браузеры
+          alert("Ваш браузер не поддерживает EventSource.");
+          return;
+      }
+
+      eventSource = new EventSource('/subscribe/new_messages');
+
+      // eventSource.onopen = function(e) {
+      //     console.log("Событие: open");
+      // };
+
+      // eventSource.onerror = function(e) {
+      //     console.log("Событие: error");
+      //     if (this.readyState == EventSource.CONNECTING) {
+      //         console.log(`Переподключение (readyState=${this.readyState})...`);
+      //     } else {
+      //         console.log("Произошла ошибка.");
+      //     }
+      // };
+
+      // eventSource.addEventListener('bye', function(e) {
+      //     console.log("Событие: bye, данные: " + e.data);
+      // });
+
+      eventSource.onmessage = function(e) {
+          console.log("Событие: message, данные: " + e.data);
+      };
+  }
+
   addEventListener("load", function (e) {
     updateCurrentChat();
+
+    setUpEventSource();
 
     document.getElementById("send_button").addEventListener("click", async function () {
       if (!document.getElementById("replyForm").reportValidity()) {

@@ -2,11 +2,13 @@ mod html;
 mod json;
 
 use anyhow::Result;
+use tokio::sync::mpsc::unbounded_channel;
 use super::{sessions, serde_form_data};
 use super::db;
 use crate::app::App;
+use crate::authorization;
 use crate::db::DbAccess;
-use crate::http::{self, Request, Response};
+use crate::http::{self, EventSourceEvent, Request, Response};
 use crate::utils::CaseInsensitiveString;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -91,6 +93,7 @@ pub async fn handle_request(request: &mut Request, app: App<impl db::DbAccess>) 
         (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, app).await,
         (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(app, params).await,
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
+        (Get, Some("subscribe"), Some("new_messages"), None, ..) => subscribe_new_messages(request, app).await,
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
         _ => Ok(Response::BadRequest),
     };
@@ -273,6 +276,36 @@ fn failed_login_response() -> Result<Response> {
         content,
         headers: Vec::new(),
     })
+}
+
+async fn subscribe_new_messages(request: &Request, app: App<impl DbAccess>) -> Result<Response> {
+    let user_id = match get_authorization(request.headers())? {
+        Some(user_id) => user_id, 
+        None => return Ok(Response::BadRequest)
+    };
+    let mut subscription = app.subscribe_new_messages(user_id, None).await?;
+
+    let (sender, receiver) = unbounded_channel();
+
+    tokio::spawn(async move {
+        loop {
+            let message = match subscription.recv().await {
+                Some(message) => message,
+                None => break,
+            };
+            let event_source_event = EventSourceEvent { 
+                data: format!("{}\nlalalal", serde_json::json!(message)),
+                id: message.id.to_string(), 
+                event: None,
+            };
+            if let Err(_) = sender.send(event_source_event) {
+                // Client has disconnected
+                break
+            }
+        }
+    });
+
+    Ok(Response::EventSource { retry: None, stream: receiver })
 }
 
 fn unauthorized_redirect() -> Response {

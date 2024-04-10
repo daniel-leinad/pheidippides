@@ -28,7 +28,7 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
     // fn users(&self) -> impl Future<Output = Result<Vec<(UserId, String)>, Self::Error>> + Send;
     fn users(&self) -> async_result!(Vec<(UserId, String)>);
     fn chats(&self, user_id: &UserId) -> async_result!(Vec<ChatInfo>);
-    fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> async_result!(Vec<Message>);
+    fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>)-> async_result!(Vec<Message>);
     fn create_message(&self, msg: &str, from: &UserId, to: &UserId) -> async_result!(MessageId);
     fn authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
     fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
@@ -84,19 +84,15 @@ impl ChatInfo {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Message {
     #[serde(serialize_with = "crate::utils::serialize_uuid")]
     pub id: MessageId,
-    #[serde(rename(serialize = "type"))]
-    pub message_type: MessageType,
+    #[serde(serialize_with = "crate::utils::serialize_uuid")]
+    pub from: UserId,
+    #[serde(serialize_with = "crate::utils::serialize_uuid")]
+    pub to: UserId,
     pub message: String,
-}
-
-#[derive(Serialize)]
-pub enum MessageType {
-    In,
-    Out,
 }
 
 pub struct AuthenticationInfo {

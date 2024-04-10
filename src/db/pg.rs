@@ -9,7 +9,7 @@ use chrono::{DateTime, Local};
 use anyhow::{Context, Result, bail};
 use thiserror::Error;
 
-use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, MessageType, UserId, MessageId};
+use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId};
 
 const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
@@ -130,16 +130,16 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error> {
+    async fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let mut query_builder = sqlx::QueryBuilder::new("");
         query_builder.push(r#"
-            select id, receiver, message
+            select id, sender, receiver, message
             from messages
-            where ((receiver = "#).push_bind(this)
-        .push(" and sender = ").push_bind(other)
-        .push(") or (receiver = ").push_bind(other)
-        .push(" and sender = ").push_bind(this)
+            where ((receiver = "#).push_bind(user_id_1)
+        .push(" and sender = ").push_bind(user_id_2)
+        .push(") or (receiver = ").push_bind(user_id_2)
+        .push(" and sender = ").push_bind(user_id_1)
         .push("))");
         
         if let Some(starting_point) = starting_point {
@@ -162,11 +162,11 @@ impl DbAccess for Db {
         let res = conn.fetch_all(query).await?
             .iter()
             .map(|row| {
-                let id = row.get(0);
-                let to: UserId = row.get(1);
-                let message = row.get(2);
-                let message_type = if to == *this {MessageType::In} else {MessageType::Out};
-                Message{id, message_type, message}
+                let id: MessageId = row.get(0);
+                let from: UserId = row.get(1);
+                let to: UserId = row.get(2);
+                let message: String = row.get(3);
+                Message{ id, from, to, message }
             })
             .collect();
         Ok(res)
