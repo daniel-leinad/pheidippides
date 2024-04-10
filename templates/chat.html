@@ -179,12 +179,13 @@
 
       eventSource.onmessage = function(e) {
           let message = JSON.parse(e.data);
-          let messageChatId = (message.from === userId() ? message.to : message.from )
-          if ((messageChatId !== current_chat_id) && (messageChatId !== current_chat_id)) {
-            return;
+          let thisUserId = userId();
+          if (((message.from === current_chat_id) && (message.to === thisUserId)) 
+              || ((message.to === current_chat_id) && (message.from === thisUserId))) {
+            
+            messagesBuffer.push(message);
+            redrawMessages(false);
           }
-          messagesBuffer.push(message);
-          redrawMessages(false);
       };
   }
 
