@@ -265,7 +265,7 @@ async fn send_message<D: db::DbAccess>(request: &mut Request, app: App<D>, recei
         },
     };
 
-    app.send_message(&params.message, &user_id, &receiver).await?;
+    app.send_message(params.message, user_id, receiver).await?;
 
     Ok(Response::Html { content: "ok.".to_owned(), headers: Vec::new() })
 }

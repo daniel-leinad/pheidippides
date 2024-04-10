@@ -134,7 +134,7 @@ impl DbAccess for Db {
         let mut conn = self.pool.acquire().await?;
         let mut query_builder = sqlx::QueryBuilder::new("");
         query_builder.push(r#"
-            select id, sender, receiver, message
+            select id, sender, receiver, message, timestamp
             from messages
             where ((receiver = "#).push_bind(user_id_1)
         .push(" and sender = ").push_bind(user_id_2)
@@ -166,27 +166,26 @@ impl DbAccess for Db {
                 let from: UserId = row.get(1);
                 let to: UserId = row.get(2);
                 let message: String = row.get(3);
-                Message{ id, from, to, message }
+                let timestamp: DateTime<chrono::Utc> = row.get(4);
+                Message{ id, from, to, message, timestamp }
             })
             .collect();
         Ok(res)
     }
     
-    async fn create_message(&self, msg: &str, from: &UserId, to: &UserId) -> Result<MessageId, Self::Error> {
+    async fn create_message(&self, message: &Message) -> Result<(), Self::Error> {
         let mut conn = self.pool.acquire().await?;
-        let message_id = Uuid::new_v4();
-        let timestamp = Local::now();
         conn.execute(query(r#"
                 insert into messages(id, sender, receiver, message, timestamp)
                 values ($1, $2, $3, $4, $5)
             "#)
-            .bind(message_id)
-            .bind(from)
-            .bind(to)
-            .bind(msg)
-            .bind(timestamp))
+            .bind(message.id)
+            .bind(message.from)
+            .bind(message.to)
+            .bind(&message.message)
+            .bind(message.timestamp))
             .await?;
-        Ok(message_id)
+        Ok(())
     }
     
     async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {

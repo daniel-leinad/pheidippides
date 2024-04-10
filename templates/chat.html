@@ -127,12 +127,22 @@
       if (msg.to === current_chat_id) {
         el.setAttribute("class", "messageOut");
       } else {
-        el.setAttribute("class", "messageIn")
+        el.setAttribute("class", "messageIn");
       }
 
+      let el_message_text = document.createElement("div");
       let messageText = document.createTextNode(msg.message);
-      el.appendChild(messageText);
-      
+      el_message_text.appendChild(messageText);
+
+      el.appendChild(el_message_text);
+
+      let el_timestamp = document.createElement("div");
+      el_timestamp.setAttribute("class", "messageTimestamp");
+      let timestampText = document.createTextNode(msg.timestamp);
+      el_timestamp.appendChild(timestampText);
+
+      el.appendChild(el_timestamp);
+
       container.appendChild(el);
 
       messages.appendChild(container);

@@ -5,6 +5,7 @@ use std::cmp::PartialEq;
 use std::hash::Hash;
 use std::future::Future;
 use std::str::FromStr;
+use chrono::DateTime;
 use thiserror::Error;
 
 use serde::Serialize;
@@ -29,7 +30,7 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
     fn users(&self) -> async_result!(Vec<(UserId, String)>);
     fn chats(&self, user_id: &UserId) -> async_result!(Vec<ChatInfo>);
     fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>)-> async_result!(Vec<Message>);
-    fn create_message(&self, msg: &str, from: &UserId, to: &UserId) -> async_result!(MessageId);
+    fn create_message(&self, message: &Message) -> async_result!(());
     fn authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
     fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
     fn create_user(&self, username: &str) -> async_result!(Option<UserId>);
@@ -93,6 +94,8 @@ pub struct Message {
     #[serde(serialize_with = "crate::utils::serialize_uuid")]
     pub to: UserId,
     pub message: String,
+    #[serde(serialize_with = "crate::utils::serialize_datetime")]
+    pub timestamp: DateTime<chrono::Utc>,
 }
 
 pub struct AuthenticationInfo {

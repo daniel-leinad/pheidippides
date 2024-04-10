@@ -66,9 +66,17 @@ impl<D: DbAccess> App<D> {
         self.db_access.username(user_id).await.with_context(|| format!("Couldn't fetch username for id {user_id}"))
     }
 
-    pub async fn send_message(&self, message_text: &str, from: &UserId, to: &UserId) -> Result<MessageId> {
+    pub async fn send_message(&self, message_text: String, from: UserId, to: UserId) -> Result<MessageId> {
+        let message = Message {
+            id: uuid::Uuid::new_v4(),
+            from: from,
+            to: to,
+            message: message_text,
+            timestamp: chrono::Utc::now(),
+        };
+
         let message_id = self.db_access
-            .create_message(message_text, from, to).await
+            .create_message(&message).await
             .with_context(|| format!("Couldn't create message from {from} to {to}"))?;
 
         match self.new_messages_subscriptions.read() {
@@ -79,21 +87,14 @@ impl<D: DbAccess> App<D> {
                 }
                 eprintln!("{informational_hash_map:?}");
 
-                let message = Message {
-                    id: message_id,
-                    from: from.to_owned(),
-                    to: to.to_owned(),
-                    message: message_text.to_owned(),
-                };
-
-                if let Some(subscriptions) = subscriptions_read.get(from) {
+                if let Some(subscriptions) = subscriptions_read.get(&from) {
                     for subscription in subscriptions {                    
                         subscription.send(message.clone());
                     }
                 };
 
                 if from != to {
-                    if let Some(subscriptions) = subscriptions_read.get(to) {
+                    if let Some(subscriptions) = subscriptions_read.get(&to) {
                         for subscription in subscriptions {                    
                             subscription.send(message.clone());
                         }
@@ -105,7 +106,7 @@ impl<D: DbAccess> App<D> {
             },
         }
 
-        Ok(message_id)
+        Ok(message.id)
     }
 
     pub async fn find_chats(&self, query: &str) -> Result<Vec<ChatInfo>> {

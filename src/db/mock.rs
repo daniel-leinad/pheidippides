@@ -10,13 +10,15 @@ struct MessageRecord {
     from: UserId,
     to: UserId,
     message: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl MessageRecord {
     fn new(from: UserId, to: UserId, message: &str) -> Self {
         let id = uuid::Uuid::new_v4();
         let message = message.into();
-        MessageRecord { id , from, to, message }
+        let timestamp = chrono::Utc::now();
+        MessageRecord { id , from, to, message, timestamp }
     }
 }
 
@@ -162,7 +164,7 @@ impl DbAccess for Db {
             .filter_map(|msg_record| {
                 if (&msg_record.from == user_id_1 && &msg_record.to == user_id_2)
                     || (&msg_record.from == user_id_2 && &msg_record.to == user_id_1) {
-                    Some(Message { id: msg_record.id, from: msg_record.from, to: msg_record.to, message: msg_record.message.to_owned() })
+                    Some(Message { id: msg_record.id, from: msg_record.from, to: msg_record.to, message: msg_record.message.to_owned(), timestamp: msg_record.timestamp })
                 } else {
                     None
                 }
@@ -173,12 +175,17 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn create_message(&self, message: &str, from: &UserId, to: &UserId) -> Result<MessageId, Error> {
+    async fn create_message(&self, message: &Message) -> Result<(), Error> {
         let mut messages_lock = self.messages.lock()?;
-        let new_message = MessageRecord::new(*from, *to, &message);
-        let msg_id = new_message.id;
-        messages_lock.push(MessageRecord::new(*from, *to, &message));
-        Ok(msg_id)
+        let new_message = MessageRecord {
+            id: message.id,
+            from: message.from,
+            to: message.to,
+            message: message.message.to_owned(),
+            timestamp: message.timestamp,
+        };
+        messages_lock.push(new_message);
+        Ok(())
     }
     
     async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
