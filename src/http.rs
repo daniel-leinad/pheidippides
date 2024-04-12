@@ -3,7 +3,7 @@ mod http_response;
 use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{Result, Context, bail};
-use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream, sync::mpsc::UnboundedReceiver};
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Interest}, net::TcpStream, sync::mpsc::UnboundedReceiver};
 use tokio_util::sync::CancellationToken;
 
 use crate::utils::{self, log_internal_error, CaseInsensitiveString};
@@ -155,9 +155,18 @@ impl Request {
                 }
                 builder.build()
             },
-            Response::EventSource { retry, stream } => {
+            Response::EventSource { retry, mut stream } => {
                 tokio::spawn(async move {
-                    let _ = handle_event_stream(writer, retry, stream).await; // Error means client has disconnected, ignore
+                    if let Err(e) = handle_event_stream(writer.into_inner(), retry, &mut stream).await {
+                        // TODO differentiate between client disconnection and other errors
+
+                        // Client disconnected, close drain and drop the stream
+                        log_internal_error(e);
+
+                        stream.close();
+                        while stream.recv().await.is_some() {};
+                        drop(stream);
+                    };
                 });
                 return Ok(());
             },
@@ -269,46 +278,76 @@ pub async fn run_server(addr: &str, request_handler: impl RequestHandler, cancel
     Ok(())
 }
 
-async fn handle_event_stream<W: tokio::io::AsyncWriteExt + Unpin>(mut writer: W, retry: Option<i32>, mut stream: UnboundedReceiver<EventSourceEvent>) -> Result<()> {
+async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, event_stream: &mut UnboundedReceiver<EventSourceEvent>) -> Result<()> {
     let http_response = HttpResponseBuilder::new()
         .content_event_stream()
         .build();
 
-    writer.write_all(&http_response.into_bytes()).await?;
+    tcp_stream.write_all(&http_response.into_bytes()).await?;
 
     if let Some(retry_value) = retry {
-        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
+        tcp_stream.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
     };
 
-    writer.flush().await?;
+    tcp_stream.flush().await?;
     loop {
-        // check that connection is still active by flushing an empty buffer.
-        if let Err(e) = writer.flush().await {
-            // connection was closed from the client, close and drain the channel and quit
-            eprintln!("Connection error: {e}");
-            stream.close();
-            while stream.recv().await.is_some() {};
-            bail!("{e}");
-        };
+        // tokio::select! {
+        //     ready_res = tcp_stream.ready(Interest::ERROR | !Interest::WRITABLE) => {
+        //         eprintln!("Error state: {ready_res:?}");
+        //     },
+        //     new_event = event_stream.recv() => {
+        //         eprintln!("Received event: {new_event:?}")
+        //     },
+        // }
 
-        match stream.recv().await {
-            Some(event) => {
-                let mut response_str = String::new();
-                if let Some(event_type) = event.event {
-                    response_str.push_str(&format!("event: {}\n", event_type));
-                }
-                for line in event.data.lines() {
-                    response_str.push_str(&format!("data: {line}\n"))
-                };
-                response_str.push_str(&format!("id: {}\n", event.id));
-                response_str.push_str("\n");
+        // let ready = tcp_stream.ready(Interest::WRITABLE | Interest::ERROR).await?;
 
-                writer.write_all(response_str.as_bytes()).await?;
-                writer.flush().await?;
+        // let loop_id = uuid::Uuid::new_v4(); 
+        // if ready.is_error() {
+        //     eprintln!("{loop_id}: Error state");
+
+        //     event_stream.close();
+        //     while event_stream.recv().await.is_some() {};
+        //     bail!("TCP stream error");
+        // } else if ready.is_writable() {
+        //     eprintln!("{loop_id}: Writable state");
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                tcp_stream.write_all(b": keep-alive\n").await.context("Keep alive failed")?;
             },
-            None => break,
+            next_event = event_stream.recv() => {
+                match next_event {
+                    Some(event) => {
+                        send_event_to_event_source_stream(&mut tcp_stream, event).await.context("Send event failed")?;
+                    },
+                    None => {
+                        break
+                    },
+                }
+            },
         }
-    };
+            
+    }
+    // };
 
+    Ok(())
+}
+
+async fn send_event_to_event_source_stream(tcp_stream: &mut TcpStream, event: EventSourceEvent) -> Result<()> {
+    // let loop_id = uuid::Uuid::new_v4();
+    // eprintln!("{loop_id}: Received event");
+    let mut response_str = String::new();
+    if let Some(event_type) = event.event {
+        response_str.push_str(&format!("event: {}\n", event_type));
+    }
+    for line in event.data.lines() {
+        response_str.push_str(&format!("data: {line}\n"))
+    };
+    response_str.push_str(&format!("id: {}\n", event.id));
+    response_str.push_str("\n");
+
+    tcp_stream.write_all(response_str.as_bytes()).await?;
+    tcp_stream.flush().await?;
+    // eprintln!("{loop_id}: Sent event");
     Ok(())
 }

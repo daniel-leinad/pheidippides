@@ -168,7 +168,7 @@
           return;
       }
 
-      eventSource = new EventSource('/subscribe/new_messages');
+      newMessagesEventSource = new EventSource('/subscribe/new_messages');
 
       // eventSource.onopen = function(e) {
       //     console.log("Событие: open");
@@ -187,15 +187,16 @@
       //     console.log("Событие: bye, данные: " + e.data);
       // });
 
-      eventSource.onmessage = function(e) {
-          let message = JSON.parse(e.data);
-          let thisUserId = userId();
-          if (((message.from === current_chat_id) && (message.to === thisUserId)) 
-              || ((message.to === current_chat_id) && (message.from === thisUserId))) {
-            
-            messagesBuffer.push(message);
-            redrawMessages(false);
-          }
+      newMessagesEventSource.onmessage = function(e) {
+        console.log("eventsource = " + e);
+        let message = JSON.parse(e.data);
+        let thisUserId = userId();
+        if (((message.from === current_chat_id) && (message.to === thisUserId)) 
+            || ((message.to === current_chat_id) && (message.from === thisUserId))) {
+          
+          messagesBuffer.push(message);
+          redrawMessages(false);
+        }
       };
   }
 
@@ -252,7 +253,11 @@
 
   addEventListener("popstate", function (e) {
     updateCurrentChat();
-  })
+  });
+
+  addEventListener("beforeunload", function(e) {
+    newMessagesEventSource.close();
+  });
 </script>
 <style>
   body {
