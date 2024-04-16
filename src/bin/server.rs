@@ -4,13 +4,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use pheidippides::{db, http, routing};
-
-macro_rules! run_server {
-    ($db_access:ident, $addr:ident, $cancellation_token:ident) => {
-        let request_handler = routing::RequestHandler::new($db_access.clone());
-        http::run_server(&$addr, request_handler, $cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", $addr))?;
-    };
-}
+use tokio_util::sync::CancellationToken;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -37,14 +31,14 @@ async fn main() -> Result<()> {
 
     if use_mock {
         let db_access = db::mock::Db::new().await;
-        run_server!(db_access, addr, cancellation_token);
+        run_server(db_access, &addr, cancellation_token).await?;
     } else {
         let db_connection = args.db.context("Database connection url must be specified")?;
         let db_access = db::pg::Db::new(&db_connection).await?;
         db_access.check_migrations().await?;
         let db_graceful_shutdown = db_access.graceful_shutdown(cancellation_token.clone());
 
-        run_server!(db_access, addr, cancellation_token);
+        run_server(db_access, &addr, cancellation_token).await?;
 
         db_graceful_shutdown.await.context("Join error in thread handling database connection shutdown")?;
     }
@@ -55,6 +49,12 @@ async fn main() -> Result<()> {
     
     // db_graceful_shutdown.await.context("Join error in thread handling database connection shutdown")?;
 
+    Ok(())
+}
+
+async fn run_server(db_access: impl db::DbAccess, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
+    let request_handler = routing::RequestHandler::new(db_access.clone());
+    http::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
     Ok(())
 }
 
