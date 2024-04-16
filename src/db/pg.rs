@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use sqlx::postgres::PgConnectOptions;
-use sqlx::{Executor, Row, query};
+use sqlx::{database, query, Executor, Row};
 use tokio::task::JoinError;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -98,34 +98,52 @@ impl DbAccess for Db {
     async fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
 
-        let temp_table_name = pg_id(&format!("temp_chat_ids_{}", Uuid::new_v4()));
+        let temp_table_chat_ids = temp_table_name("chat_ids");
         conn.execute(query(&format!(r#"
-            create temp table {temp_table_name} as 
-            select distinct 
-                sender as user_id
+            create temp table {temp_table_chat_ids} as 
+            select
+                sender as user_id,
+                MAX(timestamp) as timestamp
             from messages 
-            where receiver = $1 
+            where receiver = $1
+            group by user_id 
             
             union 
             
             select 
-                receiver as user_id
+                receiver as user_id,
+                MAX(timestamp) as timestamp
             from messages
             where sender = $1
+            group by user_id
             "#)).bind(user_id)).await?;
+        
+        let temp_table_chat_ids_grouped = temp_table_name("chat_ids_grouped");
+        conn.execute(query(&format!(r#"
+            create temp table {temp_table_chat_ids_grouped} as
+            select
+                user_id as user_id, 
+                MAX(timestamp) as timestamp
+            from {temp_table_chat_ids}
+            group by user_id
+            "#))).await?;
+
+        conn.execute(query(&format!("drop table {temp_table_chat_ids};"))).await?;
 
         let res = conn.fetch_all(query(&format!(r#"
             select
-                user_id,
-                username
-            from users
-            where user_id in (select user_id from {temp_table_name})
+                last_messages.user_id,
+                users.username
+            from
+            {temp_table_chat_ids_grouped} as last_messages
+                left join users as users on last_messages.user_id = users.user_id
+            order by last_messages.timestamp desc
             "#))).await?
             .iter()
             .map(|row| {ChatInfo{id: row.get(0), username: row.get(1)}})
             .collect();
 
-        conn.execute(query(&format!("drop table {temp_table_name};"))).await?;
+        conn.execute(query(&format!("drop table {temp_table_chat_ids_grouped};"))).await?;
 
         Ok(res)
     }
@@ -285,6 +303,10 @@ impl DbAccess for Db {
             .collect();
         Ok(res)
     }
+}
+
+fn temp_table_name(name: &str) -> String {
+    pg_id(&format!("temp_{name}_{}", Uuid::new_v4()))
 }
 
 //TODO possibly use Cow for optimization
