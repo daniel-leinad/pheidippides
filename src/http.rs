@@ -3,13 +3,16 @@ mod http_response;
 use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{Result, Context, bail};
-use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Interest}, net::TcpStream, sync::mpsc::UnboundedReceiver};
+use std::time::Duration;
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, Interest}, net::TcpStream, sync::mpsc::UnboundedReceiver};
 use tokio_util::sync::CancellationToken;
 
 use crate::utils::{self, log_internal_error, CaseInsensitiveString};
 use http_response::{HttpResponseBuilder, HttpStatusCode};
 
 pub type Header = (CaseInsensitiveString, String);
+
+const KEEP_ALIVE_CHECK_INTERVAL: Duration = Duration::from_secs(3600);
 
 pub struct Request {
     reader: BufReader<TcpStream>,
@@ -158,15 +161,12 @@ impl Request {
             Response::EventSource { retry, mut stream } => {
                 tokio::spawn(async move {
                     if let Err(e) = handle_event_stream(writer.into_inner(), retry, &mut stream).await {
-                        // TODO differentiate between client disconnection and other errors
-
-                        // Client disconnected, close drain and drop the stream
                         log_internal_error(e);
-
-                        stream.close();
-                        while stream.recv().await.is_some() {};
-                        drop(stream);
                     };
+
+                    // close drain and drop the subscription
+                    stream.close();
+                    while stream.recv().await.is_some() {};
                 });
                 return Ok(());
             },
@@ -283,42 +283,35 @@ async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, even
         .content_event_stream()
         .build();
 
-    tcp_stream.write_all(&http_response.into_bytes()).await?;
+    let (reader, writer) = tcp_stream.split();
+    let mut reader = BufReader::new(reader);
+    let mut writer = BufWriter::new(writer);
+
+    writer.write_all(&http_response.into_bytes()).await?;
 
     if let Some(retry_value) = retry {
-        tcp_stream.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
+        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
     };
 
-    tcp_stream.flush().await?;
+    writer.flush().await?;
+
     loop {
-        // tokio::select! {
-        //     ready_res = tcp_stream.ready(Interest::ERROR | !Interest::WRITABLE) => {
-        //         eprintln!("Error state: {ready_res:?}");
-        //     },
-        //     new_event = event_stream.recv() => {
-        //         eprintln!("Received event: {new_event:?}")
-        //     },
-        // }
-
-        // let ready = tcp_stream.ready(Interest::WRITABLE | Interest::ERROR).await?;
-
-        // let loop_id = uuid::Uuid::new_v4(); 
-        // if ready.is_error() {
-        //     eprintln!("{loop_id}: Error state");
-
-        //     event_stream.close();
-        //     while event_stream.recv().await.is_some() {};
-        //     bail!("TCP stream error");
-        // } else if ready.is_writable() {
-        //     eprintln!("{loop_id}: Writable state");
+        let mut read_buf = String::new();
         tokio::select! {
-            _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
-                tcp_stream.write_all(b": keep-alive\n").await.context("Keep alive failed")?;
+            _ = tokio::time::sleep(KEEP_ALIVE_CHECK_INTERVAL) => {
+                writer.write_all(b": keep-alive\n").await.context("Keep-alive failed")?;
+                writer.flush().await.context("Keep-alive failed")?
             },
+
+            _ = reader.read_line(&mut read_buf) => {
+                // Either client disconnected or something went wrong, either way stop the subscription
+                break;
+            },
+
             next_event = event_stream.recv() => {
                 match next_event {
                     Some(event) => {
-                        send_event_to_event_source_stream(&mut tcp_stream, event).await.context("Send event failed")?;
+                        send_event_to_event_source_stream(&mut writer, event).await.context("Send event failed")?;
                     },
                     None => {
                         break
@@ -328,12 +321,11 @@ async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, even
         }
             
     }
-    // };
 
     Ok(())
 }
 
-async fn send_event_to_event_source_stream(tcp_stream: &mut TcpStream, event: EventSourceEvent) -> Result<()> {
+async fn send_event_to_event_source_stream<T: AsyncWriteExt + Unpin>(writer: &mut BufWriter<T>, event: EventSourceEvent) -> Result<()> {
     // let loop_id = uuid::Uuid::new_v4();
     // eprintln!("{loop_id}: Received event");
     let mut response_str = String::new();
@@ -346,8 +338,8 @@ async fn send_event_to_event_source_stream(tcp_stream: &mut TcpStream, event: Ev
     response_str.push_str(&format!("id: {}\n", event.id));
     response_str.push_str("\n");
 
-    tcp_stream.write_all(response_str.as_bytes()).await?;
-    tcp_stream.flush().await?;
+    writer.write_all(response_str.as_bytes()).await?;
+    writer.flush().await?;
     // eprintln!("{loop_id}: Sent event");
     Ok(())
 }

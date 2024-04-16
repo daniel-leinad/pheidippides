@@ -8,6 +8,8 @@ use std::time::Duration;
 // use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::broadcast::{Receiver, Sender};
 
+const SUBSCRIPTION_GARBAGE_COLLECTION_INTERVAL: Duration = Duration::from_secs(5);
+
 #[derive(Clone)]
 pub struct App<D: DbAccess> {
     db_access: D,
@@ -22,22 +24,18 @@ impl<D: DbAccess> App<D> {
     pub fn new(db_access: D) -> Self {
         let new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>  = Arc::new(RwLock::new(HashMap::new()));
 
-        let new_messages_subscriptions_cloned = new_messages_subscriptions.clone();
+        Self::spawn_subscription_garbage_collector(new_messages_subscriptions.clone());
+        
+        App { db_access, new_messages_subscriptions }
+    }
 
-        // Background job that periodically removes unused subscriptions from the hashtable to save space
+    fn spawn_subscription_garbage_collector(new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>) {
+        // Periodically removes unused subscriptions
         tokio::spawn(async move {
             loop {
-                //TODO parametrize sleep time
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                match new_messages_subscriptions_cloned.write() {
+                tokio::time::sleep(SUBSCRIPTION_GARBAGE_COLLECTION_INTERVAL).await;
+                match new_messages_subscriptions.write() {
                     Ok(mut write_lock) => {
-                        // for (_, user_subscriptions) in write_lock.iter_mut() {
-                        //     *user_subscriptions = user_subscriptions
-                        //         .drain(..)
-                        //         .filter(|subscription| !subscription.is_closed())
-                        //         .collect();
-                        // };
-
                         write_lock.retain(|_, sender| sender.receiver_count() > 0);
                         write_lock.shrink_to_fit();
                     },
@@ -45,8 +43,6 @@ impl<D: DbAccess> App<D> {
                 }
             }
         });
-        
-        App { db_access, new_messages_subscriptions }
     }
 
     pub async fn create_user(&self, login: &str, password: String) -> Result<Option<UserId>> {

@@ -289,21 +289,29 @@ async fn subscribe_new_messages(request: &Request, app: App<impl DbAccess>) -> R
 
     tokio::spawn(async move {
         loop {
-            let message = match subscription.recv().await {
-                Ok(message) => message,
-                Err(e) => {
-                    log_internal_error(e);
-                    break
+            tokio::select! {
+                _ = sender.closed() => {
+                    break;
                 },
-            };
-            let event_source_event = EventSourceEvent { 
-                data: serde_json::json!(message).to_string(),
-                id: message.id.to_string(), 
-                event: None,
-            };
-            if let Err(_) = sender.send(event_source_event) {
-                // Client has disconnected
-                break
+                
+                message_res = subscription.recv() => {
+                    let message = match message_res {
+                        Ok(message) => message,
+                        Err(e) => {
+                            log_internal_error(e);
+                            break
+                        },
+                    };
+                    let event_source_event = EventSourceEvent { 
+                        data: serde_json::json!(message).to_string(),
+                        id: message.id.to_string(), 
+                        event: None,
+                    };
+                    if let Err(_) = sender.send(event_source_event) {
+                        // Client has disconnected
+                        break
+                    }
+                },
             }
         }
     });
