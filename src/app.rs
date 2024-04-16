@@ -114,11 +114,6 @@ impl<D: DbAccess> App<D> {
             Ok(read_lock) => read_lock,
             Err(e) => bail!("Could not lock new_messages_subscriptions for read: {e}"),
         };
-        let mut informational_hash_map = HashMap::new();
-        for (key, value) in subscriptions_read.iter() {
-            informational_hash_map.insert(key, value.receiver_count());
-        }
-        eprintln!("{informational_hash_map:?}");
 
         if let Some(sender) = subscriptions_read.get(&message.from) {
             Self::send_event_to_subscribers(sender, message)
