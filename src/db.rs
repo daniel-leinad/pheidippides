@@ -70,6 +70,23 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
             Ok(res)
         }
     }
+
+    fn chat_info(&self, user_id: &UserId) -> async_result!(Option<ChatInfo>) {
+        async move {
+            let chat_info = self.users().await?
+                .into_iter().filter_map(|(id, username)| {
+                    if &id == user_id {
+                        let id = id.to_owned();
+                        let username = username.to_owned();
+                        Some(ChatInfo { username, id })
+                    } else {
+                        None
+                    }
+                })
+                .next();
+            Ok(chat_info)
+        }
+    }
 }
 
 #[derive(PartialEq, Hash)]

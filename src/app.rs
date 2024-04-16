@@ -85,6 +85,11 @@ impl<D: DbAccess> App<D> {
         Ok(chats)
     }
 
+    pub async fn fetch_chat_info(&self, user_id: &UserId) -> Result<Option<ChatInfo>> {
+        let chat_info = self.db_access.chat_info(user_id).await?;
+        Ok(chat_info)
+    }
+
     pub async fn username(&self, user_id: &UserId) -> Result<Option<String>> {
         self.db_access.username(user_id).await.with_context(|| format!("Couldn't fetch username for id {user_id}"))
     }

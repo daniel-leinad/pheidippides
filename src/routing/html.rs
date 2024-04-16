@@ -89,3 +89,18 @@ pub async fn chatsearch_html(app: App<impl db::DbAccess>, params: &str) -> Resul
     Ok(Response::Html{content: chats_html, headers: vec![]})
 
 }
+
+pub async fn chat_html_response(app: App<impl db::DbAccess>, chat_id: &str) -> Result<Response> {
+    // TODO authorization first??
+    
+    let chat_id: UserId = match chat_id.parse() {
+        Ok(res) => res,
+        Err(_) => return Ok(Response::BadRequest),
+    };
+
+    let chat_info = app.fetch_chat_info(&chat_id).await?;
+
+    let res = ChatHtmlElements{chats: chat_info.into_iter().collect()}.render()?;
+
+    Ok(Response::Html { content: res, headers: vec![] })
+}

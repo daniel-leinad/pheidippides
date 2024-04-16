@@ -92,6 +92,7 @@ pub async fn handle_request(request: &mut Request, app: App<impl db::DbAccess>) 
         (Post, Some("message"), Some(receiver), None, ..) => send_message(request, app, receiver).await,
         (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, app).await,
         (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(app, params).await,
+        (Get, Some("html"), Some("chat"), Some(chat_id), ..) => html::chat_html_response(app, chat_id).await,
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
         (Get, Some("subscribe"), Some("new_messages"), None, ..) => subscribe_new_messages(request, app, params).await,
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
