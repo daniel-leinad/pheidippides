@@ -7,7 +7,7 @@ use super::{sessions, serde_form_data};
 use super::db;
 use crate::app::App;
 use crate::authorization;
-use crate::db::DbAccess;
+use crate::db::{DbAccess, MessageId};
 use crate::http::{self, EventSourceEvent, Request, Response};
 use crate::utils::CaseInsensitiveString;
 use serde::{Deserialize, Serialize};
@@ -93,7 +93,7 @@ pub async fn handle_request(request: &mut Request, app: App<impl db::DbAccess>) 
         (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, app).await,
         (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(app, params).await,
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
-        (Get, Some("subscribe"), Some("new_messages"), None, ..) => subscribe_new_messages(request, app).await,
+        (Get, Some("subscribe"), Some("new_messages"), None, ..) => subscribe_new_messages(request, app, params).await,
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
         _ => Ok(Response::BadRequest),
     };
@@ -278,12 +278,45 @@ fn failed_login_response() -> Result<Response> {
     })
 }
 
-async fn subscribe_new_messages(request: &Request, app: App<impl DbAccess>) -> Result<Response> {
+#[derive(Deserialize)]
+struct SubscribeNewMessagesParams<'a> {
+    last_message_id: Option<&'a str>,
+}
+
+async fn subscribe_new_messages(request: &Request, app: App<impl DbAccess>, params: &str) -> Result<Response> {
     let user_id = match get_authorization(request.headers())? {
         Some(user_id) => user_id, 
         None => return Ok(Response::BadRequest)
     };
-    let mut subscription = app.subscribe_new_messages(user_id, None).await?;
+
+    let subscribe_new_messages_params: SubscribeNewMessagesParams = match serde_form_data::from_str(params) {
+        Ok(res) => res,
+        Err(_) => return Ok(Response::BadRequest),
+    };
+
+    let last_message_id_params = match subscribe_new_messages_params.last_message_id {
+        Some(s) => {
+            match s.parse() {
+                Ok(res) => Some(res),
+                Err(_) => return Ok(Response::BadRequest)
+            }
+        },
+        None => None,
+    };
+
+    let last_message_id_header: Option<MessageId> = match request.headers().get(&CaseInsensitiveString::from("Last-Event-ID")) {
+        Some(header_value) => {
+            match header_value.parse() {
+                Ok(last_event_id) => Some(last_event_id),
+                Err(_) => return Ok(Response::BadRequest),
+            }
+        },
+        None => None,
+    };
+
+    let starting_point = last_message_id_header.or(last_message_id_params);
+
+    let mut subscription = app.subscribe_new_messages(user_id, dbg!(starting_point)).await?;
 
     let (sender, receiver) = unbounded_channel();
 
@@ -293,7 +326,7 @@ async fn subscribe_new_messages(request: &Request, app: App<impl DbAccess>) -> R
                 _ = sender.closed() => {
                     break;
                 },
-                
+
                 message_res = subscription.recv() => {
                     let message = match message_res {
                         Ok(message) => message,
