@@ -102,7 +102,7 @@ impl ChatInfo {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq, Debug)]
 pub struct Message {
     #[serde(serialize_with = "crate::utils::serialize_uuid")]
     pub id: MessageId,
