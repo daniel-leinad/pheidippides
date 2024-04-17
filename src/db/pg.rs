@@ -165,7 +165,7 @@ impl DbAccess for Db {
                 .fetch_optional(query("select timestamp from messages where id = $1").bind(starting_point)).await?;
             //TODO possibly handle case when timestamp is none
             if let Some(pg_row) = msg_timestamp {
-                let msg_timestamp: DateTime<Local> = pg_row.get(0);
+                let msg_timestamp: DateTime<chrono::Utc> = pg_row.get(0);
                 query_builder
                     .push(" and (timestamp <= ").push_bind(msg_timestamp)
                     .push(") and (id < ").push_bind(starting_point)
@@ -301,6 +301,46 @@ impl DbAccess for Db {
                 ChatInfo{ username, id }
             })
             .collect();
+        Ok(res)
+    }
+    
+    async fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Error> {
+        let mut conn = self.pool.acquire().await?;
+
+        let msg_timestamp: Option<DateTime<chrono::Utc>> = conn
+                .fetch_optional(
+                    query("select timestamp from messages where id = $1").bind(starting_point)
+                ).await?.map(|row| row.get(0));
+        
+        let msg_timestamp = match msg_timestamp {
+            Some(msg_timestamp) => msg_timestamp,
+            None => return Ok(vec![]),
+        };
+
+        let res = conn.fetch_all(query(r#"
+            select id, sender, receiver, message, timestamp
+            from messages
+            where ((receiver = $1) or (sender = $1)) and (timestamp >= $2) and (id > $3)
+        "#).bind(user_id).bind(msg_timestamp).bind(starting_point)).await?
+        .into_iter()
+        .map(|row| {
+            let id: MessageId = row.get(0);
+            let from: UserId = row.get(1);
+            let to: UserId = row.get(2);
+            let message: String = row.get(3);
+            let timestamp: DateTime<chrono::Utc> = row.get(4);
+            Message{ id, from, to, message, timestamp }
+        })
+        .collect();
+
+        Ok(res)
+    }
+
+    async fn chat_info(&self, user_id: &UserId) -> Result<Option<ChatInfo>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn
+            .fetch_optional(query("select username from users where users.user_id = $1").bind(user_id)).await?
+            .map(|row| {ChatInfo{ username: row.get(0), id: *user_id }});
         Ok(res)
     }
 }

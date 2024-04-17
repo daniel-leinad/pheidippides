@@ -1,3 +1,5 @@
+use uuid::timestamp;
+
 use crate::authorization;
 
 use super::*;
@@ -225,5 +227,26 @@ impl DbAccess for Db {
 
         table_locked.push((user_id.clone(), username.to_owned()));
         Ok(Some(user_id))
+    }
+    
+    async fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Self::Error> {
+        let res = self.messages.lock()?
+            .iter()
+            .skip_while(|message_record| message_record.id != *starting_point)
+            .skip(1)
+            .filter_map(|message_record| {
+                let id = message_record.id;
+                let from = message_record.from;
+                let to = message_record.to;
+                let message = message_record.message.clone();
+                let timestamp = message_record.timestamp;
+                if from == *user_id || to == *user_id {
+                    Some(Message { id, from, to, message, timestamp })
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Ok(res)
     }
 }

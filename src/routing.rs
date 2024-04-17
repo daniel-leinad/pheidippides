@@ -7,7 +7,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use super::{sessions, serde_form_data};
 use super::db;
 use crate::app::App;
-use crate::authorization;
+use crate::{async_utils, authorization};
 use crate::db::{DbAccess, MessageId};
 use crate::http::{self, EventSourceEvent, Request, Response};
 use crate::utils::CaseInsensitiveString;
@@ -318,40 +318,50 @@ async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app:
 
     let starting_point = last_message_id_header.or(last_message_id_params);
 
-    let mut subscription = app.subscribe_new_messages(user_id, dbg!(starting_point)).await?;
+    let subscription = app.subscribe_new_messages(user_id, dbg!(starting_point)).await?;
 
-    let (sender, receiver) = unbounded_channel();
+    // let (sender, receiver) = unbounded_channel();
 
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = sender.closed() => {
-                    break;
-                },
+    // tokio::spawn(async move {
+    //     loop {
+    //         tokio::select! {
+    //             _ = sender.closed() => {
+    //                 break;
+    //             },
 
-                message_res = subscription.recv() => {
-                    let message = match message_res {
-                        Ok(message) => message,
-                        Err(e) => {
-                            log_internal_error(e);
-                            break
-                        },
-                    };
-                    let event_source_event = EventSourceEvent { 
-                        data: serde_json::json!(message).to_string(),
-                        id: message.id.to_string(), 
-                        event: None,
-                    };
-                    if let Err(_) = sender.send(event_source_event) {
-                        // Client has disconnected
-                        break
-                    }
-                },
-            }
-        }
+    //             message_res = subscription.recv() => {
+    //                 let message = match message_res {
+    //                     Ok(message) => message,
+    //                     Err(e) => {
+    //                         log_internal_error(e);
+    //                         break
+    //                     },
+    //                 };
+    //                 let event_source_event = EventSourceEvent { 
+    //                     data: serde_json::json!(message).to_string(),
+    //                     id: message.id.to_string(), 
+    //                     event: None,
+    //                 };
+    //                 if let Err(_) = sender.send(event_source_event) {
+    //                     // Client has disconnected
+    //                     break
+    //                 }
+    //             },
+    //         }
+    //     }
+    // });
+
+    let stream = async_utils::pipe_unbounded_channel(
+        subscription, 
+        |message| {
+            Some(EventSourceEvent { 
+                data: serde_json::json!(message).to_string(),
+                id: message.id.to_string(), 
+                event: None,
+            })
     });
 
-    Ok(Response::EventSource { retry: None, stream: receiver })
+    Ok(Response::EventSource { retry: None, stream })
 }
 
 fn unauthorized_redirect() -> Response {

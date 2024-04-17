@@ -1,7 +1,8 @@
 use crate::db::{ChatInfo, DbAccess, MessageId, UserId, Message};
 use crate::utils::log_internal_error;
 use anyhow::{Context, Result, bail};
-use crate::authorization;
+use tokio::sync::mpsc;
+use crate::{async_utils, authorization};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock, Mutex};
 use std::time::Duration;
@@ -155,18 +156,39 @@ impl<D: DbAccess> App<D> {
                 current_user: {current_user}, other_user: {other_user}, starting_point: {starting_point:?}"))
     }
 
-    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> Result<Receiver<Message>> {
-        // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut subscriptions_lock = match self.new_messages_subscriptions.write() {
-            Ok(res) => res,
-            Err(e) => bail!("Could not lock new_messages_subscriptions for write: {e}"),
+    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> Result<tokio::sync::mpsc::UnboundedReceiver<Message>> {
+        let subscription = {
+            // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+            let mut subscriptions_lock = match self.new_messages_subscriptions.write() {
+                Ok(res) => res,
+                Err(e) => bail!("Could not lock new_messages_subscriptions for write: {e}"),
+            };
+
+            subscriptions_lock.entry(user_id).or_insert(tokio::sync::broadcast::channel(100).0).subscribe()
         };
 
-        let receiver = subscriptions_lock.entry(user_id).or_insert(tokio::sync::broadcast::channel(100).0).subscribe();
-
         match starting_point {
-            None => Ok(receiver), // no extra channel needed, simply receive new messages
-            Some(starting_point) => { todo!() }
+            None => {
+                // no extra channel needed, simply convert broadcast to an unbounded channel
+                Ok(async_utils::pipe_broadcast(subscription, |v| Some(v)))
+            },
+            Some(starting_point) => {
+                let previous_messages = self.db_access.users_messages_since(&user_id, &starting_point).await?;
+                let (sender, receiver) = mpsc::unbounded_channel();
+                
+                let mut sent_messages = HashSet::new();
+                for message in previous_messages {
+                    sent_messages.insert(message.id);
+                    sender.send(message);
+                };
+
+                let subscription_filtered = async_utils::pipe_broadcast(subscription, move |message| {
+                    if sent_messages.contains(&message.id) {None} else {Some(message)}
+                });
+
+                async_utils::redirect_unbounded_channel(subscription_filtered, sender);
+                Ok(receiver)
+            },
         }
     }
 
