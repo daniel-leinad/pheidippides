@@ -2,6 +2,7 @@ mod html;
 mod json;
 
 use anyhow::Result;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc::unbounded_channel;
 use super::{sessions, serde_form_data};
 use super::db;
@@ -45,15 +46,15 @@ impl std::fmt::Display for RequestHandlerError {
 
 impl std::error::Error for RequestHandlerError {}
 
-impl<D: db::DbAccess> http::RequestHandler for RequestHandler<D> {
+impl<D: db::DbAccess, T: AsyncRead + Unpin + Sync + Send> http::RequestHandler<Request<T>> for RequestHandler<D> {
     type Error = RequestHandlerError;
 
-    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
+    fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
         handle_request(request, self.app)
     }
 }
 
-pub async fn handle_request(request: &mut Request, app: App<impl db::DbAccess>) -> Result<Response, RequestHandlerError> {
+pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DbAccess>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -109,7 +110,7 @@ pub async fn handle_request(request: &mut Request, app: App<impl db::DbAccess>) 
     // request.respond(response)
 }
 
-fn main_page(request: &Request) -> Result<Response> {
+fn main_page<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
     let headers = request.headers();
 
     match get_authorization(headers)? {
@@ -118,8 +119,8 @@ fn main_page(request: &Request) -> Result<Response> {
     }
 }
 
-async fn chat_page<D: DbAccess>(
-    request: &Request,
+async fn chat_page<D: DbAccess, T: AsyncRead + Unpin>(
+    request: &Request<T>,
     app: App<D>,
     _chat_id: Option<&str>,
 ) -> Result<Response> {
@@ -153,7 +154,7 @@ async fn signup_page() -> Result<Response> {
     Ok(Response::Html { content , headers })
 }
 
-fn logout(request: &Request) -> Result<Response> {
+fn logout<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
     let headers = request.headers();
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
@@ -175,7 +176,7 @@ struct AuthorizationParams {
     password: String,
 }
 
-async fn authorization(request: &mut Request, app: App<impl db::DbAccess>) -> Result<Response> {
+async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DbAccess>) -> Result<Response> {
     let content = request.content().await?;
 
     let authorization_params: AuthorizationParams =
@@ -213,7 +214,7 @@ enum SignupError {
     UsernameTaken,
 }
 
-async fn signup(request: &mut Request, app: App<impl DbAccess>) -> Result<Response> {
+async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl DbAccess>) -> Result<Response> {
     let content = request.content().await?;
     let auth_params: AuthorizationParams = match serde_json::from_str(&content) {
         Ok(auth_params) => auth_params,
@@ -243,7 +244,7 @@ struct SendMessageParams {
     message: String,
 }
 
-async fn send_message<D: db::DbAccess>(request: &mut Request, app: App<D>, receiver: &str) -> Result<Response> {
+async fn send_message<D: db::DbAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<D>, receiver: &str) -> Result<Response> {
 
     let receiver: db::UserId = match receiver.parse() {
         Ok(res) => res,
@@ -284,7 +285,7 @@ struct SubscribeNewMessagesParams<'a> {
     last_message_id: Option<&'a str>,
 }
 
-async fn subscribe_new_messages(request: &Request, app: App<impl DbAccess>, params: &str) -> Result<Response> {
+async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl DbAccess>, params: &str) -> Result<Response> {
     let user_id = match get_authorization(request.headers())? {
         Some(user_id) => user_id, 
         None => return Ok(Response::BadRequest)

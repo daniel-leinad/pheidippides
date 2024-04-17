@@ -6,6 +6,7 @@ use crate::http::{Request, Response};
 use crate::app::App;
 use serde::{Serialize, Deserialize};
 use super::get_authorization;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[derive(Deserialize, Debug)]
 struct MessagesUrlParams {
@@ -24,7 +25,7 @@ enum MessageResponseError {
     Unauthorized,
 }
 
-pub async fn messages_json(request: &Request, app: App<impl db::DbAccess>, chat_id: &str, params: &str) -> Result<Response> {
+pub async fn messages_json<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl db::DbAccess>, chat_id: &str, params: &str) -> Result<Response> {
 
     let chat_id: UserId = match chat_id.parse() {
         Ok(chat_id) => chat_id,

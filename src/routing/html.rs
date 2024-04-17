@@ -6,6 +6,7 @@ use crate::http::{Request, Response};
 use serde::Deserialize;
 use super::get_authorization;
 use askama::Template;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[derive(Template)]
 #[template(path = "chat.html")]
@@ -55,7 +56,7 @@ pub fn login_fail_page() -> Result<String> {
     LoginFailPage{}.render().context("Could not render login_fail.html")
 }
 
-pub async fn chats_html_response(request: &Request, app: App<impl db::DbAccess>) -> Result<Response> {
+pub async fn chats_html_response<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl db::DbAccess>) -> Result<Response> {
     let headers = request.headers();
     let authorization = get_authorization(headers)?;
     let response_string = match authorization {

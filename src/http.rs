@@ -4,7 +4,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{Result, Context, bail};
 use std::time::Duration;
-use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, Interest}, net::TcpStream, sync::mpsc::UnboundedReceiver};
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, Interest, AsyncRead, AsyncWrite}, net::TcpStream, sync::mpsc::UnboundedReceiver};
 use tokio_util::sync::CancellationToken;
 
 use crate::utils::{self, log_internal_error, CaseInsensitiveString};
@@ -14,8 +14,8 @@ pub type Header = (CaseInsensitiveString, String);
 
 const KEEP_ALIVE_CHECK_INTERVAL: Duration = Duration::from_secs(3600);
 
-pub struct Request {
-    reader: BufReader<TcpStream>,
+pub struct Request<T> {
+    reader: BufReader<T>,
     method: Method,
     url: String,
     headers: HashMap<CaseInsensitiveString, String>,
@@ -66,7 +66,7 @@ impl FromStr for Method {
     }
 }
 
-impl Request {
+impl Request<TcpStream> {
     pub async fn try_from_stream(stream: TcpStream) -> Result<Self> {
         let mut reader = BufReader::new(stream);
 
@@ -90,32 +90,6 @@ impl Request {
         };
         
         Ok(Request { reader , method, url, headers})
-    }
-
-    pub fn url(&self) -> &str {
-        &self.url
-    }
-
-    pub fn method(&self) -> Method {
-        self.method
-    }
-
-    pub fn headers(&self) -> &HashMap<CaseInsensitiveString, String> {
-        &self.headers
-    }
-
-    pub async fn content(&mut self) -> Result<String> {
-        let header_name: CaseInsensitiveString = "content-length".into();
-        let content_length: usize = self
-            .headers()
-            .get(&header_name)
-            .context("Content-Length header is missing")?
-            .parse()
-            .with_context(|| format!("Couldn't parse content-length as a number: {:?}", self.headers().get(&header_name)))?;
-        let mut buf = vec![0u8; content_length];
-        self.reader.read_exact(&mut buf).await?;
-        let res = String::from_utf8(buf)?;
-        Ok(res)
     }
 
     pub async fn respond(self, response: Response) -> Result<()> {
@@ -192,6 +166,35 @@ impl Request {
     }
 }
 
+impl<T: AsyncRead + Unpin> Request<T> {
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn method(&self) -> Method {
+        self.method
+    }
+
+    pub fn headers(&self) -> &HashMap<CaseInsensitiveString, String> {
+        &self.headers
+    }
+
+    pub async fn content(&mut self) -> Result<String> {
+        let header_name: CaseInsensitiveString = "content-length".into();
+        let content_length: usize = self
+            .headers()
+            .get(&header_name)
+            .context("Content-Length header is missing")?
+            .parse()
+            .with_context(|| format!("Couldn't parse content-length as a number: {:?}", self.headers().get(&header_name)))?;
+        let mut buf = vec![0u8; content_length];
+        self.reader.read_exact(&mut buf).await?;
+        let res = String::from_utf8(buf)?;
+        Ok(res)
+    }
+}
+
 pub enum Response {
     Html {
         content: String,
@@ -225,12 +228,12 @@ pub struct EventSourceEvent {
     pub event: Option<String>,
 }
 
-pub trait RequestHandler: 'static + Send + Clone {
+pub trait RequestHandler<R>: 'static + Send + Clone {
     type Error: std::error::Error;
-    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send;
+    fn handle(self, request: &mut R) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send;
 }
 
-pub async fn run_server(addr: &str, request_handler: impl RequestHandler, cancellation_token: CancellationToken) -> Result<()> {
+pub async fn run_server(addr: &str, request_handler: impl RequestHandler<Request<TcpStream>>, cancellation_token: CancellationToken) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     eprintln!("Started a server at {addr}");
