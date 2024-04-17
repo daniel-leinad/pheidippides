@@ -1,5 +1,6 @@
 mod html;
 mod json;
+mod tools;
 
 use anyhow::Result;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -96,6 +97,7 @@ pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app:
         (Get, Some("html"), Some("chat"), Some(chat_id), ..) => html::chat_html_response(app, chat_id).await,
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
         (Get, Some("subscribe"), Some("new_messages"), None, ..) => subscribe_new_messages(request, app, params).await,
+        (Get, Some("tools"), Some("event_source"), None, ..) => tools::event_source(request),
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
         _ => Ok(Response::BadRequest),
     };
@@ -281,8 +283,8 @@ fn failed_login_response() -> Result<Response> {
 }
 
 #[derive(Deserialize)]
-struct SubscribeNewMessagesParams<'a> {
-    last_message_id: Option<&'a str>,
+struct SubscribeNewMessagesParams {
+    last_message_id: Option<String>,
 }
 
 async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl DbAccess>, params: &str) -> Result<Response> {
@@ -293,14 +295,22 @@ async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app:
 
     let subscribe_new_messages_params: SubscribeNewMessagesParams = match serde_form_data::from_str(params) {
         Ok(res) => res,
-        Err(_) => return Ok(Response::BadRequest),
+        Err(e) => {
+            //TODO this is temporary
+            log_internal_error(e);
+            return Ok(Response::BadRequest)
+        },
     };
 
     let last_message_id_params = match subscribe_new_messages_params.last_message_id {
         Some(s) => {
             match s.parse() {
                 Ok(res) => Some(res),
-                Err(_) => return Ok(Response::BadRequest)
+                Err(e) => {
+                    //TODO this is temporary
+                    log_internal_error(e);
+                    return Ok(Response::BadRequest)
+                }
             }
         },
         None => None,
@@ -310,7 +320,11 @@ async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app:
         Some(header_value) => {
             match header_value.parse() {
                 Ok(last_event_id) => Some(last_event_id),
-                Err(_) => return Ok(Response::BadRequest),
+                Err(e) => {
+                    //TODO this is temporary
+                    log_internal_error(e);
+                    return Ok(Response::BadRequest)
+                },
             }
         },
         None => None,
