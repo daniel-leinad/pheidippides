@@ -21,7 +21,7 @@ pub struct Request<T> {
     headers: HashMap<CaseInsensitiveString, String>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Method {
     Get,
     Put,
