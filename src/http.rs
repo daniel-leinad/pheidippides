@@ -67,30 +67,6 @@ impl FromStr for Method {
 }
 
 impl Request<TcpStream> {
-    pub async fn try_from_stream(stream: TcpStream) -> Result<Self> {
-        let mut reader = BufReader::new(stream);
-
-        let mut first_line = String::new();
-        reader.read_line(&mut first_line).await.context("Could not read line")?;
-        let mut first_line_split = first_line.split_whitespace();
-        let context = || format!("Could not parse first line: {first_line}");
-        let method: Method = first_line_split.next().with_context(context)?.parse()?;
-        let url = first_line_split.next().with_context(context)?.to_owned();
-
-        let mut headers = HashMap::new();
-        loop {
-            let mut next_line = String::new();
-            reader.read_line(&mut next_line).await.context("Could not read line")?;
-            if next_line == "\r\n" {
-                break;
-            } else {
-                let (key, value) = next_line.split_once(": ").with_context(|| format!("Incorrect header: {next_line}"))?;
-                headers.insert(key.into(), value.trim_end().to_string());
-            }
-        };
-        
-        Ok(Request { reader , method, url, headers})
-    }
 
     pub async fn respond(self, response: Response) -> Result<()> {
         let mut writer = tokio::io::BufWriter::new(self.reader.into_inner());
@@ -167,6 +143,31 @@ impl Request<TcpStream> {
 }
 
 impl<T: AsyncRead + Unpin> Request<T> {
+
+    pub async fn try_from_stream(stream: T) -> Result<Self> {
+        let mut reader = BufReader::new(stream);
+
+        let mut first_line = String::new();
+        reader.read_line(&mut first_line).await.context("Could not read line")?;
+        let mut first_line_split = first_line.split_whitespace();
+        let context = || format!("Could not parse first line: {first_line}");
+        let method: Method = first_line_split.next().with_context(context)?.parse()?;
+        let url = first_line_split.next().with_context(context)?.to_owned();
+
+        let mut headers = HashMap::new();
+        loop {
+            let mut next_line = String::new();
+            reader.read_line(&mut next_line).await.context("Could not read line")?;
+            if next_line == "\r\n" {
+                break;
+            } else {
+                let (key, value) = next_line.split_once(": ").with_context(|| format!("Incorrect header: {next_line}"))?;
+                headers.insert(key.into(), value.trim_end().to_string());
+            }
+        };
+        
+        Ok(Request { reader , method, url, headers})
+    }
 
     pub fn url(&self) -> &str {
         &self.url
