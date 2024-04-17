@@ -321,6 +321,7 @@ impl DbAccess for Db {
             select id, sender, receiver, message, timestamp
             from messages
             where ((receiver = $1) or (sender = $1)) and (timestamp >= $2) and (id > $3)
+            order by timestamp
         "#).bind(user_id).bind(msg_timestamp).bind(starting_point)).await?
         .into_iter()
         .map(|row| {
