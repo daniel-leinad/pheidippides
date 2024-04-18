@@ -3,9 +3,6 @@ use crate::authorization;
 use super::*;
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
-//TODO move it to crate::db?
-const MESSAGE_LOAD_BUF_SIZE: usize = 50;
-
 struct MessageRecord {
     id: MessageId,
     from: UserId,
@@ -170,7 +167,7 @@ impl DbAccess for Db {
                     None
                 }
             })
-            .take(MESSAGE_LOAD_BUF_SIZE)
+            .take(MESSAGE_LOAD_BUF_SIZE as usize)
             .collect();
 
         Ok(res)
