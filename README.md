@@ -26,8 +26,6 @@ Database access - talks to the database: responsible for reading and modifying s
 DBMS (Postgres) - the database itself
 ```
 
-(I intend to expand it in the future by adding an Application layer between the Web server layer and the Database access layer):
-
 # Get started
 
 Terminal commands should work on both Powershell 7 and bash 
