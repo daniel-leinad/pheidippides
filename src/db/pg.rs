@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use sqlx::postgres::PgConnectOptions;
-use sqlx::{database, query, Executor, Row};
+use sqlx::{database, query, Execute, Executor, PgPool, Row};
 use tokio::task::JoinError;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -11,6 +11,7 @@ use thiserror::Error;
 
 use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId};
 
+//TODO move it to crate::db?
 const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 const DB_VERSION: i64 = 2;
@@ -68,6 +69,10 @@ impl Db {
 
     pub async fn migrate(&self) -> Result<()> {
         MIGRATOR.run(&self.pool).await.context("Couldn't migrate")
+    }
+
+    pub fn from_pool(pool: PgPool) -> Self {
+        Db {pool}
     }
 }
 
@@ -154,10 +159,10 @@ impl DbAccess for Db {
         query_builder.push(r#"
             select id, sender, receiver, message, timestamp
             from messages
-            where ((receiver = "#).push_bind(user_id_1)
-        .push(" and sender = ").push_bind(user_id_2)
-        .push(") or (receiver = ").push_bind(user_id_2)
-        .push(" and sender = ").push_bind(user_id_1)
+            where ((receiver = "#).push_bind(dbg!(user_id_1))
+        .push(" and sender = ").push_bind(dbg!(user_id_2))
+        .push(") or (receiver = ").push_bind(dbg!(user_id_2))
+        .push(" and sender = ").push_bind(dbg!(user_id_1))
         .push("))");
         
         if let Some(starting_point) = starting_point {
@@ -167,16 +172,17 @@ impl DbAccess for Db {
             if let Some(pg_row) = msg_timestamp {
                 let msg_timestamp: DateTime<chrono::Utc> = pg_row.get(0);
                 query_builder
-                    .push(" and (timestamp <= ").push_bind(msg_timestamp)
-                    .push(") and (id < ").push_bind(starting_point)
-                    .push(")");
+                    .push(" and ((timestamp, id) < (").push_bind(dbg!(msg_timestamp))
+                    .push(", ").push_bind(dbg!(starting_point))
+                    .push("))");
             }
         }
 
         query_builder.push(" order by timestamp desc");
-        query_builder.push(" limit ").push_bind(MESSAGE_LOAD_BUF_SIZE);
+        query_builder.push(" limit ").push_bind(dbg!(MESSAGE_LOAD_BUF_SIZE));
 
         let query = query_builder.build();
+        dbg!(query.sql());
         let res = conn.fetch_all(query).await?
             .iter()
             .map(|row| {
@@ -185,7 +191,7 @@ impl DbAccess for Db {
                 let to: UserId = row.get(2);
                 let message: String = row.get(3);
                 let timestamp: DateTime<chrono::Utc> = row.get(4);
-                Message{ id, from, to, message, timestamp }
+                dbg!(Message{ id, from, to, message, timestamp })
             })
             .collect();
         Ok(res)
@@ -320,9 +326,9 @@ impl DbAccess for Db {
         let res = conn.fetch_all(query(r#"
             select id, sender, receiver, message, timestamp
             from messages
-            where ((receiver = $1) or (sender = $1)) and (timestamp >= $2) and (id > $3)
+            where ((receiver = $1) or (sender = $1)) and ((timestamp, id) > ($2, $3))
             order by timestamp
-        "#).bind(user_id).bind(msg_timestamp).bind(starting_point)).await?
+        "#).bind(dbg!(user_id)).bind(dbg!(msg_timestamp)).bind(dbg!(starting_point))).await?
         .into_iter()
         .map(|row| {
             let id: MessageId = row.get(0);
@@ -330,7 +336,7 @@ impl DbAccess for Db {
             let to: UserId = row.get(2);
             let message: String = row.get(3);
             let timestamp: DateTime<chrono::Utc> = row.get(4);
-            Message{ id, from, to, message, timestamp }
+            dbg!(Message{ id, from, to, message, timestamp })
         })
         .collect();
 
@@ -357,6 +363,8 @@ fn pg_id(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use sqlx::PgPool;
+
     use super::*;
 
     #[test]
@@ -373,4 +381,16 @@ mod tests {
         let input = r#"weird table , - ; " : "#;
         assert_eq!(pg_id(input), r#""weird table , - ; "" : ""#);
     }
+
+    macro_rules! test_db_access {
+        ($name:ident) => {
+            #[sqlx::test(migrator = "MIGRATOR")]
+            async fn $name(pool: PgPool) {
+                let db_access = Db::from_pool(pool);
+                crate::db::tests::$name(&db_access).await;
+            }
+        };
+    }
+
+    crate::db_access_tests!{test_db_access}
 }

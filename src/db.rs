@@ -154,3 +154,170 @@ impl FromStr for AuthenticationInfo {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{future::Future, time::Duration};
+
+    use super::{DbAccess, Message};
+    use anyhow::{Result, Context, ensure};
+    use chrono::DateTime;
+    use uuid::{timestamp, Uuid};
+
+    #[macro_export]
+    macro_rules! db_access_tests {
+        ($tester:ident) => {
+            $tester!{it_creates_user}
+            $tester!{doesnt_fetch_nonexistent_users}
+            $tester!{it_creates_message}
+            $tester!{fetches_last_messages}
+            $tester!{fetches_users_messages_since}
+        };
+    }
+
+    pub async fn it_creates_user(db_access: &impl DbAccess) {
+        let username = "TestUser1";
+        let user_id = db_access.create_user(username).await
+            .unwrap()
+            .unwrap();
+        assert_eq!(db_access.username(&user_id).await.unwrap().unwrap(), username);
+        assert_eq!(db_access.user_id(username).await.unwrap().unwrap(), user_id);
+    }
+
+    pub async fn doesnt_fetch_nonexistent_users(db_access: &impl DbAccess) {
+        assert!(db_access.username(&uuid::Uuid::new_v4()).await.unwrap().is_none());
+        assert!(db_access.user_id("__NonExistentUserOnlyForTesting").await.unwrap().is_none());
+    }
+
+    pub async fn it_creates_message(db_access: &impl DbAccess) {
+        let sender_id = db_access.create_user("__Test_Sender").await.unwrap().unwrap();
+        let receiver_id = db_access.create_user("__Test_Receiver").await.unwrap().unwrap();
+        let message = Message{ 
+            id: Uuid::new_v4(), 
+            from: sender_id, 
+            to: receiver_id, 
+            message: "Test message".to_owned(), 
+            timestamp: chrono::Utc::now(), 
+        };
+
+        db_access.create_message(&message).await.unwrap();
+    }
+
+    pub async fn fetches_last_messages(db_access: &impl DbAccess) {
+        let user_1 = db_access.create_user("__User_1").await.unwrap().unwrap();
+        let user_2 = db_access.create_user("__User_2").await.unwrap().unwrap();
+        let user_3 = db_access.create_user("__User_3").await.unwrap().unwrap();
+
+        let messages = [
+            (user_1, user_2, "Message 1"),
+            (user_2, user_1, "Message 2"),
+            (user_1, user_2, "Message 3"), // starting point
+            (user_2, user_1, "Message 4"),
+            (user_1, user_3, "Message 5"),
+            (user_2, user_3, "Message 6"),
+            (user_3, user_2, "Message 7"),
+            (user_3, user_1, "Message 8"),
+        ];
+
+        //TODO assert that message len fits into buffer
+
+        let mut starting_id = Uuid::nil();
+
+        let mut timestamp = chrono::Utc::now();
+
+        for (from, to, msg) in messages {
+            timestamp = timestamp + Duration::from_secs(1);
+            let id = Uuid::new_v4();
+            if msg == "Message 3" {
+                starting_id = id;
+            };
+            db_access.create_message(&Message { 
+                id: id, 
+                from, 
+                to, 
+                message: msg.to_owned(), 
+                timestamp,
+            }).await.unwrap();
+        };
+
+        let mut last_messages = db_access
+            .last_messages(&user_1, &user_2, None)
+            .await
+            .unwrap()
+            .into_iter();
+
+        assert_eq!(&last_messages.next().unwrap().message, "Message 4");
+        assert_eq!(&last_messages.next().unwrap().message, "Message 3");
+        assert_eq!(&last_messages.next().unwrap().message, "Message 2");
+        assert_eq!(&last_messages.next().unwrap().message, "Message 1");
+        assert_eq!(last_messages.next(), None);
+
+        let mut last_messages = db_access
+            .last_messages(&user_3, &user_2, None)
+            .await
+            .unwrap()
+            .into_iter();
+
+        assert_eq!(&last_messages.next().unwrap().message, "Message 7");
+        assert_eq!(&last_messages.next().unwrap().message, "Message 6");
+        assert_eq!(last_messages.next(), None);
+
+        let mut last_messages = db_access
+            .last_messages(&user_1, &user_2, Some(starting_id))
+            .await
+            .unwrap()
+            .into_iter();
+
+        assert_eq!(&last_messages.next().unwrap().message, "Message 2");
+        assert_eq!(&last_messages.next().unwrap().message, "Message 1");
+        assert_eq!(last_messages.next(), None);
+
+    }
+
+    pub async fn fetches_users_messages_since(db_access: &impl DbAccess) {
+        let user_1 = db_access.create_user("__User_1").await.unwrap().unwrap();
+        let user_2 = db_access.create_user("__User_2").await.unwrap().unwrap();
+        let user_3 = db_access.create_user("__User_3").await.unwrap().unwrap();
+
+        let messages = [
+            (user_1, user_2, "Message 1"),
+            (user_2, user_1, "Message 2"),
+            (user_1, user_2, "Message 3"), // starting point
+            (user_2, user_1, "Message 4"),
+            (user_1, user_3, "Message 5"),
+            (user_2, user_3, "Message 6"),
+            (user_3, user_2, "Message 7"),
+            (user_3, user_1, "Message 8"),
+        ];
+
+        let mut starting_id = Uuid::nil();
+
+        let mut timestamp = chrono::Utc::now();
+
+        for (from, to, msg) in messages {
+            timestamp = timestamp + Duration::from_secs(1);
+            let id = Uuid::new_v4();
+            if msg == "Message 3" {
+                starting_id = id;
+            };
+            db_access.create_message(&Message { 
+                id: id, 
+                from, 
+                to, 
+                message: msg.to_owned(), 
+                timestamp,
+            }).await.unwrap();
+        };
+
+        let mut users_messages_since = db_access
+            .users_messages_since(&user_1, &starting_id)
+            .await
+            .unwrap()
+            .into_iter();
+        
+        assert_eq!(&users_messages_since.next().unwrap().message, "Message 4");
+        assert_eq!(&users_messages_since.next().unwrap().message, "Message 5");
+        assert_eq!(&users_messages_since.next().unwrap().message, "Message 8");
+        assert_eq!(users_messages_since.next(), None);
+    }
+}

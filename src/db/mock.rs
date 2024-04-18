@@ -5,6 +5,7 @@ use crate::authorization;
 use super::*;
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
+//TODO move it to crate::db?
 const MESSAGE_LOAD_BUF_SIZE: usize = 50;
 
 struct MessageRecord {
@@ -249,4 +250,21 @@ impl DbAccess for Db {
             .collect();
         Ok(res)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Db;
+
+    macro_rules! test {
+        ($name:ident) => {
+            #[tokio::test]
+            async fn $name() {
+                let db_access = Db::new().await;
+                crate::db::tests::$name(&db_access).await;
+            }
+        };
+    }
+
+    crate::db_access_tests!{test}
 }
