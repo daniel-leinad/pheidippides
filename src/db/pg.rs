@@ -9,10 +9,8 @@ use chrono::DateTime;
 use anyhow::{Context, Result, bail};
 use thiserror::Error;
 
-use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId};
+use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId, MESSAGE_LOAD_BUF_SIZE};
 
-//TODO move it to crate::db?
-const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 const DB_VERSION: i64 = 2;
 

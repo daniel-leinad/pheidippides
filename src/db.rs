@@ -15,6 +15,8 @@ use uuid::Uuid;
 pub type MessageId = Uuid;
 pub type UserId = Uuid;
 
+const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
+
 // written as a macro to use Self::Error
 macro_rules! async_result {
     ($t:ty) => {
