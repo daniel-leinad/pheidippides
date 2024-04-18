@@ -162,7 +162,7 @@ mod tests {
     use super::{DbAccess, Message};
     use anyhow::{Result, Context, ensure};
     use chrono::DateTime;
-    use uuid::{timestamp, Uuid};
+    use uuid::{timestamp, uuid, Uuid};
 
     #[macro_export]
     macro_rules! db_access_tests {
@@ -185,7 +185,7 @@ mod tests {
     }
 
     pub async fn doesnt_fetch_nonexistent_users(db_access: &impl DbAccess) {
-        assert!(db_access.username(&uuid::Uuid::new_v4()).await.unwrap().is_none());
+        assert!(db_access.username(&uuid!("4ec09097-45d5-43a0-bdea-614948bce47e")).await.unwrap().is_none());
         assert!(db_access.user_id("__NonExistentUserOnlyForTesting").await.unwrap().is_none());
     }
 
@@ -193,7 +193,7 @@ mod tests {
         let sender_id = db_access.create_user("__Test_Sender").await.unwrap().unwrap();
         let receiver_id = db_access.create_user("__Test_Receiver").await.unwrap().unwrap();
         let message = Message{ 
-            id: Uuid::new_v4(), 
+            id: uuid!("5b438594-81bc-48ce-8694-e2c14dcd45dc"), 
             from: sender_id, 
             to: receiver_id, 
             message: "Test message".to_owned(), 
@@ -209,28 +209,24 @@ mod tests {
         let user_3 = db_access.create_user("__User_3").await.unwrap().unwrap();
 
         let messages = [
-            (user_1, user_2, "Message 1"),
-            (user_2, user_1, "Message 2"),
-            (user_1, user_2, "Message 3"), // starting point
-            (user_2, user_1, "Message 4"),
-            (user_1, user_3, "Message 5"),
-            (user_2, user_3, "Message 6"),
-            (user_3, user_2, "Message 7"),
-            (user_3, user_1, "Message 8"),
+            (uuid!("ae8855d6-1446-4be2-b059-d1f150e7f33b"), user_1, user_2, "Message 1"),
+            (uuid!("e24af34e-f1cb-4a82-8916-2072ec6c785d"), user_2, user_1, "Message 2"),
+            (uuid!("ce9fe950-c323-4b3b-8a63-1c5497b2f582"), user_1, user_2, "Message 3"), // starting point
+            (uuid!("160ee275-2b26-4745-b928-70e0fc0d6733"), user_2, user_1, "Message 4"),
+            (uuid!("8c142367-3782-4bde-91ef-dd518a15c75a"), user_1, user_3, "Message 5"),
+            (uuid!("29a9b6fd-ae3d-4602-a495-7530c488f6b4"), user_2, user_3, "Message 6"),
+            (uuid!("8a75c5c9-d7b6-428e-a1cc-a34ee05c5a14"), user_3, user_2, "Message 7"),
+            (uuid!("a82a13cd-7b34-4911-9319-0ae718287197"), user_3, user_1, "Message 8"),
         ];
 
         //TODO assert that message len fits into buffer
 
-        let mut starting_id = Uuid::nil();
+        let starting_id = uuid!("ce9fe950-c323-4b3b-8a63-1c5497b2f582");
 
         let mut timestamp = chrono::Utc::now();
 
-        for (from, to, msg) in messages {
+        for (id, from, to, msg) in messages {
             timestamp = timestamp + Duration::from_secs(1);
-            let id = Uuid::new_v4();
-            if msg == "Message 3" {
-                starting_id = id;
-            };
             db_access.create_message(&Message { 
                 id: id, 
                 from, 
@@ -280,26 +276,22 @@ mod tests {
         let user_3 = db_access.create_user("__User_3").await.unwrap().unwrap();
 
         let messages = [
-            (user_1, user_2, "Message 1"),
-            (user_2, user_1, "Message 2"),
-            (user_1, user_2, "Message 3"), // starting point
-            (user_2, user_1, "Message 4"),
-            (user_1, user_3, "Message 5"),
-            (user_2, user_3, "Message 6"),
-            (user_3, user_2, "Message 7"),
-            (user_3, user_1, "Message 8"),
+            (uuid!("cec8c6f5-39a2-4aed-91a7-10c60853f05a"), user_1, user_2, "Message 1"),
+            (uuid!("2dbb11b1-7be2-4b56-a99f-c0102189f07e"), user_2, user_1, "Message 2"),
+            (uuid!("cc11d4b1-d3dd-49b2-a83a-480d46a13c62"), user_1, user_2, "Message 3"), // starting point
+            (uuid!("4b78d736-fdcc-48a3-91b5-2e55ecfd3794"), user_2, user_1, "Message 4"),
+            (uuid!("e63e45b4-b8c9-4113-9c66-80e7f429bbd1"), user_1, user_3, "Message 5"),
+            (uuid!("fa1a289c-f80a-429f-a509-b2c41b0f8ea4"), user_2, user_3, "Message 6"),
+            (uuid!("4e00b39e-c248-45d0-885a-aba31b7471d7"), user_3, user_2, "Message 7"),
+            (uuid!("832dc1d0-a74a-4c65-9a5b-e87c850f73dc"), user_3, user_1, "Message 8"),
         ];
 
-        let mut starting_id = Uuid::nil();
+        let starting_id = uuid!("cc11d4b1-d3dd-49b2-a83a-480d46a13c62");
 
         let mut timestamp = chrono::Utc::now();
 
-        for (from, to, msg) in messages {
+        for (id, from, to, msg) in messages {
             timestamp = timestamp + Duration::from_secs(1);
-            let id = Uuid::new_v4();
-            if msg == "Message 3" {
-                starting_id = id;
-            };
             db_access.create_message(&Message { 
                 id: id, 
                 from, 
