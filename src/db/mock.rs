@@ -3,6 +3,7 @@ use crate::authorization;
 use super::*;
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
+//TODO move it to crate::db?
 const MESSAGE_LOAD_BUF_SIZE: usize = 50;
 
 struct MessageRecord {
@@ -10,13 +11,15 @@ struct MessageRecord {
     from: UserId,
     to: UserId,
     message: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl MessageRecord {
     fn new(from: UserId, to: UserId, message: &str) -> Self {
         let id = uuid::Uuid::new_v4();
         let message = message.into();
-        MessageRecord { id , from, to, message }
+        let timestamp = chrono::Utc::now();
+        MessageRecord { id , from, to, message, timestamp }
     }
 }
 
@@ -56,10 +59,10 @@ pub struct Db {
 impl Db {
     pub async fn new() -> Self {
         let mut users_vec = vec![
-            (uuid::Uuid::new_v4(), "Dan".into()),
-            (uuid::Uuid::new_v4(), "Man".into()),
-            (uuid::Uuid::new_v4(), "John".into()),
-            (uuid::Uuid::new_v4(), "Разговорчивый".into()),
+            (uuid::Uuid::new_v4(), "User1".into()),
+            (uuid::Uuid::new_v4(), "User2".into()),
+            (uuid::Uuid::new_v4(), "User3".into()),
+            (uuid::Uuid::new_v4(), "Пользователь1".into()),
         ];
 
         for i in 5..100 {
@@ -72,14 +75,14 @@ impl Db {
         }
 
         let messages_vec = vec![
-            ("Dan", "Dan", "Привет!"),
-            ("Dan", "Dan", "Ой, я написал самому себе..."),
-            ("Man", "Dan", "Hey"),
-            ("Dan", "Man", "Hey, man.."),
-            ("Man", "Dan", "Actually, I AM Man..."),
-            ("Dan", "Man", "Right... 😂😂😂"),
-            ("Dan", "John", "Hey, John, like your new song!"),
-            ("John", "Dan", "Thanks, it's very popular, can you imagine that?"),
+            ("User1", "User1", "Hello myself 1"),
+            ("User1", "User1", "Hello myself 2"),
+            ("User2", "User1", "Hello 1"),
+            ("User1", "User2", "Hello 2"),
+            ("User2", "User1", "Hello 3"),
+            ("User1", "User2", "Hello 4 😊"),
+            ("User1", "User3", "Hello 5"),
+            ("User3", "User1", "Hello 6"),
         ];
 
         let mut messages_vec = {
@@ -92,12 +95,12 @@ impl Db {
 
         for i in 0..100 {
             // messages_vec.push(MessageRecord { from: "4".into(), to: "1".into(), message: format!("Привет! ({i})") })
-            messages_vec.push(MessageRecord::new(username_id_map["Разговорчивый"], username_id_map["Dan"], &format!("Привет! ({i})")));
+            messages_vec.push(MessageRecord::new(username_id_map["Пользователь1"], username_id_map["User1"], &format!("Привет! ({i})")));
         };
 
         for (user_id, _) in users_vec.iter().skip(4) {
             // messages_vec.push(MessageRecord { from: user_id.clone(), to: "1".into(), message: "Привет".into() })
-            messages_vec.push(MessageRecord::new(*user_id, username_id_map["Dan"], "Привет"));
+            messages_vec.push(MessageRecord::new(*user_id, username_id_map["User1"], "Привет"));
         };
 
         let users = Arc::new(Mutex::new(users_vec));
@@ -107,8 +110,8 @@ impl Db {
         let res = Db { users, messages, auth };
 
         let credentials = [
-            (username_id_map["Dan"], "Dan"),
-            (username_id_map["Man"], "123"),
+            (username_id_map["User1"], "User1"),
+            (username_id_map["User2"], "123"),
         ];
 
         for (user_id, password) in credentials {
@@ -134,7 +137,7 @@ impl DbAccess for Db {
             };
             res
         };
-        let res = self.messages.lock()?.iter().filter_map(|msg_record| {
+        let res = self.messages.lock()?.iter().rev().filter_map(|msg_record| {
             if &msg_record.from == user_id {
                 Some(ChatInfo::new::<Db>(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else if &msg_record.to == user_id {
@@ -151,7 +154,7 @@ impl DbAccess for Db {
         Ok(res)
     }
 
-    async fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
+    async fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
         let res = self.messages.lock()?.iter()
             .rev()
             .skip_while(|msg_record| match &starting_point {
@@ -160,12 +163,9 @@ impl DbAccess for Db {
             })
             .skip(if starting_point.is_some() {1} else {0})
             .filter_map(|msg_record| {
-                if &msg_record.from == this && &msg_record.to == other {
-                    // Some(Message::Out(msg_record.id.clone(), msg_record.message.clone()))
-                    Some(Message { id: msg_record.id.clone(), message_type: MessageType::Out, message: msg_record.message.clone() })
-                } else if &msg_record.from == other && &msg_record.to == this {
-                    // Some(Message::In(msg_record.id.clone(), msg_record.message.clone()))
-                    Some(Message { id: msg_record.id.clone(), message_type: MessageType::In, message: msg_record.message.clone() })
+                if (&msg_record.from == user_id_1 && &msg_record.to == user_id_2)
+                    || (&msg_record.from == user_id_2 && &msg_record.to == user_id_1) {
+                    Some(Message { id: msg_record.id, from: msg_record.from, to: msg_record.to, message: msg_record.message.to_owned(), timestamp: msg_record.timestamp })
                 } else {
                     None
                 }
@@ -176,12 +176,17 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn create_message(&self, message: String, from: &UserId, to: &UserId) -> Result<MessageId, Error> {
+    async fn create_message(&self, message: &Message) -> Result<(), Error> {
         let mut messages_lock = self.messages.lock()?;
-        let new_message = MessageRecord::new(*from, *to, &message);
-        let msg_id = new_message.id;
-        messages_lock.push(MessageRecord::new(*from, *to, &message));
-        Ok(msg_id)
+        let new_message = MessageRecord {
+            id: message.id,
+            from: message.from,
+            to: message.to,
+            message: message.message.to_owned(),
+            timestamp: message.timestamp,
+        };
+        messages_lock.push(new_message);
+        Ok(())
     }
     
     async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
@@ -222,4 +227,42 @@ impl DbAccess for Db {
         table_locked.push((user_id.clone(), username.to_owned()));
         Ok(Some(user_id))
     }
+    
+    async fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Self::Error> {
+        let res = self.messages.lock()?
+            .iter()
+            .skip_while(|message_record| message_record.id != *starting_point)
+            .skip(1)
+            .filter_map(|message_record| {
+                let id = message_record.id;
+                let from = message_record.from;
+                let to = message_record.to;
+                let message = message_record.message.clone();
+                let timestamp = message_record.timestamp;
+                if from == *user_id || to == *user_id {
+                    Some(Message { id, from, to, message, timestamp })
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Ok(res)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Db;
+
+    macro_rules! test {
+        ($name:ident) => {
+            #[tokio::test]
+            async fn $name() {
+                let db_access = Db::new().await;
+                crate::db::tests::$name(&db_access).await;
+            }
+        };
+    }
+
+    crate::db_access_tests!{test}
 }

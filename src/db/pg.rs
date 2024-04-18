@@ -1,16 +1,17 @@
 use std::future::Future;
 
 use sqlx::postgres::PgConnectOptions;
-use sqlx::{Executor, Row, query};
+use sqlx::{query, Executor, PgPool, Row};
 use tokio::task::JoinError;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use anyhow::{Context, Result, bail};
 use thiserror::Error;
 
-use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, MessageType, UserId, MessageId};
+use super::{AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId};
 
+//TODO move it to crate::db?
 const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 const DB_VERSION: i64 = 2;
@@ -69,6 +70,10 @@ impl Db {
     pub async fn migrate(&self) -> Result<()> {
         MIGRATOR.run(&self.pool).await.context("Couldn't migrate")
     }
+
+    pub fn from_pool(pool: PgPool) -> Self {
+        Db {pool}
+    }
 }
 
 #[derive(Debug, Error)]
@@ -98,48 +103,66 @@ impl DbAccess for Db {
     async fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
 
-        let temp_table_name = pg_id(&format!("temp_chat_ids_{}", Uuid::new_v4()));
+        let temp_table_chat_ids = temp_table_name("chat_ids");
         conn.execute(query(&format!(r#"
-            create temp table {temp_table_name} as 
-            select distinct 
-                sender as user_id
+            create temp table {temp_table_chat_ids} as 
+            select
+                sender as user_id,
+                MAX(timestamp) as timestamp
             from messages 
-            where receiver = $1 
+            where receiver = $1
+            group by user_id 
             
             union 
             
             select 
-                receiver as user_id
+                receiver as user_id,
+                MAX(timestamp) as timestamp
             from messages
             where sender = $1
+            group by user_id
             "#)).bind(user_id)).await?;
+        
+        let temp_table_chat_ids_grouped = temp_table_name("chat_ids_grouped");
+        conn.execute(query(&format!(r#"
+            create temp table {temp_table_chat_ids_grouped} as
+            select
+                user_id as user_id, 
+                MAX(timestamp) as timestamp
+            from {temp_table_chat_ids}
+            group by user_id
+            "#))).await?;
+
+        conn.execute(query(&format!("drop table {temp_table_chat_ids};"))).await?;
 
         let res = conn.fetch_all(query(&format!(r#"
             select
-                user_id,
-                username
-            from users
-            where user_id in (select user_id from {temp_table_name})
+                last_messages.user_id,
+                users.username
+            from
+            {temp_table_chat_ids_grouped} as last_messages
+                left join users as users on last_messages.user_id = users.user_id
+            order by last_messages.timestamp desc
             "#))).await?
             .iter()
             .map(|row| {ChatInfo{id: row.get(0), username: row.get(1)}})
             .collect();
 
-        conn.execute(query(&format!("drop table {temp_table_name};"))).await?;
+        conn.execute(query(&format!("drop table {temp_table_chat_ids_grouped};"))).await?;
 
         Ok(res)
     }
     
-    async fn last_messages(&self, this: &UserId, other: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error> {
+    async fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let mut query_builder = sqlx::QueryBuilder::new("");
         query_builder.push(r#"
-            select id, receiver, message
+            select id, sender, receiver, message, timestamp
             from messages
-            where ((receiver = "#).push_bind(this)
-        .push(" and sender = ").push_bind(other)
-        .push(") or (receiver = ").push_bind(other)
-        .push(" and sender = ").push_bind(this)
+            where ((receiver = "#).push_bind(user_id_1)
+        .push(" and sender = ").push_bind(user_id_2)
+        .push(") or (receiver = ").push_bind(user_id_2)
+        .push(" and sender = ").push_bind(user_id_1)
         .push("))");
         
         if let Some(starting_point) = starting_point {
@@ -147,11 +170,11 @@ impl DbAccess for Db {
                 .fetch_optional(query("select timestamp from messages where id = $1").bind(starting_point)).await?;
             //TODO possibly handle case when timestamp is none
             if let Some(pg_row) = msg_timestamp {
-                let msg_timestamp: DateTime<Local> = pg_row.get(0);
+                let msg_timestamp: DateTime<chrono::Utc> = pg_row.get(0);
                 query_builder
-                    .push(" and (timestamp <= ").push_bind(msg_timestamp)
-                    .push(") and (id < ").push_bind(starting_point)
-                    .push(")");
+                    .push(" and ((timestamp, id) < (").push_bind(msg_timestamp)
+                    .push(", ").push_bind(starting_point)
+                    .push("))");
             }
         }
 
@@ -162,31 +185,30 @@ impl DbAccess for Db {
         let res = conn.fetch_all(query).await?
             .iter()
             .map(|row| {
-                let id = row.get(0);
-                let to: UserId = row.get(1);
-                let message = row.get(2);
-                let message_type = if to == *this {MessageType::In} else {MessageType::Out};
-                Message{id, message_type, message}
+                let id: MessageId = row.get(0);
+                let from: UserId = row.get(1);
+                let to: UserId = row.get(2);
+                let message: String = row.get(3);
+                let timestamp: DateTime<chrono::Utc> = row.get(4);
+                Message{ id, from, to, message, timestamp }
             })
             .collect();
         Ok(res)
     }
     
-    async fn create_message(&self, msg: String, from: &UserId, to: &UserId) -> Result<MessageId, Self::Error> {
+    async fn create_message(&self, message: &Message) -> Result<(), Self::Error> {
         let mut conn = self.pool.acquire().await?;
-        let message_id = Uuid::new_v4();
-        let timestamp = Local::now();
         conn.execute(query(r#"
                 insert into messages(id, sender, receiver, message, timestamp)
                 values ($1, $2, $3, $4, $5)
             "#)
-            .bind(message_id)
-            .bind(from)
-            .bind(to)
-            .bind(msg)
-            .bind(timestamp))
+            .bind(message.id)
+            .bind(message.from)
+            .bind(message.to)
+            .bind(&message.message)
+            .bind(message.timestamp))
             .await?;
-        Ok(message_id)
+        Ok(())
     }
     
     async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
@@ -264,7 +286,7 @@ impl DbAccess for Db {
         Ok(res.map(|row| row.get(0)))
     }
 
-    async fn user_id(&self, requested_username: &String) -> Result<Option<UserId>, Error> {
+    async fn user_id(&self, requested_username: &str) -> Result<Option<UserId>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_optional(query(r#"
             select user_id from users where lower(username) = $1
@@ -286,6 +308,51 @@ impl DbAccess for Db {
             .collect();
         Ok(res)
     }
+    
+    async fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Error> {
+        let mut conn = self.pool.acquire().await?;
+
+        let msg_timestamp: Option<DateTime<chrono::Utc>> = conn
+                .fetch_optional(
+                    query("select timestamp from messages where id = $1").bind(starting_point)
+                ).await?.map(|row| row.get(0));
+        
+        let msg_timestamp = match msg_timestamp {
+            Some(msg_timestamp) => msg_timestamp,
+            None => return Ok(vec![]),
+        };
+
+        let res = conn.fetch_all(query(r#"
+            select id, sender, receiver, message, timestamp
+            from messages
+            where ((receiver = $1) or (sender = $1)) and ((timestamp, id) > ($2, $3))
+            order by timestamp
+        "#).bind(user_id).bind(msg_timestamp).bind(starting_point)).await?
+        .into_iter()
+        .map(|row| {
+            let id: MessageId = row.get(0);
+            let from: UserId = row.get(1);
+            let to: UserId = row.get(2);
+            let message: String = row.get(3);
+            let timestamp: DateTime<chrono::Utc> = row.get(4);
+            Message{ id, from, to, message, timestamp }
+        })
+        .collect();
+
+        Ok(res)
+    }
+
+    async fn chat_info(&self, user_id: &UserId) -> Result<Option<ChatInfo>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn
+            .fetch_optional(query("select username from users where users.user_id = $1").bind(user_id)).await?
+            .map(|row| {ChatInfo{ username: row.get(0), id: *user_id }});
+        Ok(res)
+    }
+}
+
+fn temp_table_name(name: &str) -> String {
+    pg_id(&format!("temp_{name}_{}", Uuid::new_v4()))
 }
 
 //TODO possibly use Cow for optimization
@@ -311,4 +378,16 @@ mod tests {
         let input = r#"weird table , - ; " : "#;
         assert_eq!(pg_id(input), r#""weird table , - ; "" : ""#);
     }
+
+    macro_rules! test_db_access {
+        ($name:ident) => {
+            #[sqlx::test(migrator = "MIGRATOR")]
+            async fn $name(pool: PgPool) {
+                let db_access = Db::from_pool(pool);
+                crate::db::tests::$name(&db_access).await;
+            }
+        };
+    }
+
+    crate::db_access_tests!{test_db_access}
 }

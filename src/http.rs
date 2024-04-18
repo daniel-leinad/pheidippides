@@ -3,22 +3,25 @@ mod http_response;
 use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{Result, Context};
-use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::TcpStream};
+use std::time::Duration;
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, AsyncRead}, net::TcpStream, sync::mpsc::UnboundedReceiver};
 use tokio_util::sync::CancellationToken;
 
-use crate::utils::{self, CaseInsensitiveString};
+use crate::utils::{self, log_internal_error, CaseInsensitiveString};
 use http_response::{HttpResponseBuilder, HttpStatusCode};
 
 pub type Header = (CaseInsensitiveString, String);
 
-pub struct Request {
-    reader: BufReader<TcpStream>,
+const KEEP_ALIVE_CHECK_INTERVAL: Duration = Duration::from_secs(3600);
+
+pub struct Request<T> {
+    reader: BufReader<T>,
     method: Method,
     url: String,
     headers: HashMap<CaseInsensitiveString, String>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Method {
     Get,
     Put,
@@ -63,8 +66,85 @@ impl FromStr for Method {
     }
 }
 
-impl Request {
-    pub async fn try_from_stream(stream: TcpStream) -> Result<Self> {
+impl Request<TcpStream> {
+
+    pub async fn respond(self, response: Response) -> Result<()> {
+        let mut writer = tokio::io::BufWriter::new(self.reader.into_inner());
+        let http_response = 
+        match response {
+            Response::Text{text, headers} => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.body(&text);
+                builder.content_text();
+                for header in headers {
+                    builder.header(header);
+                }
+                builder.build()
+            },
+            Response::Html { content, headers } => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.body(&content);
+                builder.content_html();
+                for header in headers {
+                    builder.header(header);
+                };
+                builder.build()
+            },
+            Response::Json { content, headers } => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.body(&content);
+                builder.content_json();
+                for header in headers {
+                    builder.header(header);
+                };
+                builder.build()
+            },
+            Response::Redirect { location, headers } => {
+                let mut builder = HttpResponseBuilder::new();
+                builder.status(HttpStatusCode::SeeOther);
+                builder.header((CaseInsensitiveString::from("Location"), location));
+                for header in headers {
+                    builder.header(header);
+                }
+                builder.build()
+            },
+            Response::EventSource { retry, mut stream } => {
+                tokio::spawn(async move {
+                    if let Err(e) = handle_event_stream(writer.into_inner(), retry, &mut stream).await {
+                        log_internal_error(e);
+                    };
+
+                    // close drain and drop the subscription
+                    stream.close();
+                    while stream.recv().await.is_some() {};
+                });
+                return Ok(());
+            },
+            Response::BadRequest => {
+                HttpResponseBuilder::new()
+                    .status(HttpStatusCode::BadRequest)
+                    .body("Bad request")
+                    .build()
+            },
+            Response::InternalServerError => {
+                HttpResponseBuilder::new()
+                    .status(HttpStatusCode::InternalServerError)
+                    .body("Internal Server Error")
+                    .build()
+            },
+            Response::Empty => {
+                HttpResponseBuilder::new().build()
+            }
+        };
+        writer.write_all(&http_response.into_bytes()).await?;
+        writer.shutdown().await?;
+        Ok(())
+    }
+}
+
+impl<T: AsyncRead + Unpin> Request<T> {
+
+    pub async fn try_from_stream(stream: T) -> Result<Self> {
         let mut reader = BufReader::new(stream);
 
         let mut first_line = String::new();
@@ -114,67 +194,6 @@ impl Request {
         let res = String::from_utf8(buf)?;
         Ok(res)
     }
-
-    pub async fn respond(self, response: Response) -> Result<()> {
-        let mut writer = tokio::io::BufWriter::new(self.reader.into_inner());
-        let http_response = 
-        match response {
-            Response::Text{text, headers} => {
-                let mut builder = HttpResponseBuilder::new();
-                builder.body(&text);
-                builder.content_text();
-                for header in headers {
-                    builder.header(header);
-                }
-                builder.build()
-            },
-            Response::Html { content, headers } => {
-                let mut builder = HttpResponseBuilder::new();
-                builder.body(&content);
-                builder.content_html();
-                for header in headers {
-                    builder.header(header);
-                };
-                builder.build()
-            },
-            Response::Json { content, headers } => {
-                let mut builder = HttpResponseBuilder::new();
-                builder.body(&content);
-                builder.content_json();
-                for header in headers {
-                    builder.header(header);
-                };
-                builder.build()
-            },
-            Response::Redirect { location, headers } => {
-                let mut builder = HttpResponseBuilder::new();
-                builder.status(HttpStatusCode::SeeOther);
-                builder.header((CaseInsensitiveString::from("Location"), location));
-                for header in headers {
-                    builder.header(header);
-                }
-                builder.build()
-            },
-            Response::BadRequest => {
-                HttpResponseBuilder::new()
-                    .status(HttpStatusCode::BadRequest)
-                    .body("Bad request")
-                    .build()
-            },
-            Response::InternalServerError => {
-                HttpResponseBuilder::new()
-                    .status(HttpStatusCode::InternalServerError)
-                    .body("Internal Server Error")
-                    .build()
-            },
-            Response::Empty => {
-                HttpResponseBuilder::new().build()
-            }
-        };
-        writer.write_all(&http_response.into_bytes()).await?;
-        writer.shutdown().await?;
-        Ok(())
-    }
 }
 
 pub enum Response {
@@ -194,17 +213,28 @@ pub enum Response {
         location: String, 
         headers: Vec<Header>
     },
+    EventSource{
+        retry: Option<i32>,
+        stream: tokio::sync::mpsc::UnboundedReceiver<EventSourceEvent>,
+    },
     BadRequest,
     InternalServerError,
     Empty,
 }
 
-pub trait RequestHandler: 'static + Send + Clone {
-    type Error: std::error::Error;
-    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send;
+#[derive(Debug)]
+pub struct EventSourceEvent {
+    pub data: String,
+    pub id: String,
+    pub event: Option<String>,
 }
 
-pub async fn run_server(addr: &str, request_handler: impl RequestHandler, cancellation_token: CancellationToken) -> Result<()> {
+pub trait RequestHandler<R>: 'static + Send + Clone {
+    type Error: std::error::Error;
+    fn handle(self, request: &mut R) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send;
+}
+
+pub async fn run_server(addr: &str, request_handler: impl RequestHandler<Request<TcpStream>>, cancellation_token: CancellationToken) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     eprintln!("Started a server at {addr}");
@@ -249,5 +279,71 @@ pub async fn run_server(addr: &str, request_handler: impl RequestHandler, cancel
         });
     };
     eprintln!("Shutting down server...Success");
+    Ok(())
+}
+
+async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, event_stream: &mut UnboundedReceiver<EventSourceEvent>) -> Result<()> {
+    let http_response = HttpResponseBuilder::new()
+        .content_event_stream()
+        .build();
+
+    let (reader, writer) = tcp_stream.split();
+    let mut reader = BufReader::new(reader);
+    let mut writer = BufWriter::new(writer);
+
+    writer.write_all(&http_response.into_bytes()).await?;
+
+    if let Some(retry_value) = retry {
+        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
+    };
+
+    writer.flush().await?;
+
+    loop {
+        let mut read_buf = String::new();
+        tokio::select! {
+            _ = tokio::time::sleep(KEEP_ALIVE_CHECK_INTERVAL) => {
+                writer.write_all(b": keep-alive\n").await.context("Keep-alive failed")?;
+                writer.flush().await.context("Keep-alive failed")?
+            },
+
+            _ = reader.read_line(&mut read_buf) => {
+                // Either client disconnected or something went wrong, either way stop the subscription
+                break;
+            },
+
+            next_event = event_stream.recv() => {
+                match next_event {
+                    Some(event) => {
+                        send_event_to_event_source_stream(&mut writer, event).await.context("Send event failed")?;
+                    },
+                    None => {
+                        break
+                    },
+                }
+            },
+        }
+            
+    }
+
+    Ok(())
+}
+
+async fn send_event_to_event_source_stream<T: AsyncWriteExt + Unpin>(writer: &mut BufWriter<T>, event: EventSourceEvent) -> Result<()> {
+    // let loop_id = uuid::Uuid::new_v4();
+    // eprintln!("{loop_id}: Received event");
+    let mut response_str = String::new();
+    if let Some(event_type) = event.event {
+        response_str.push_str(&format!("event: {}\n", event_type));
+    }
+    for line in event.data.lines() {
+        response_str.push_str(&format!("data: {line}\n"))
+    };
+    response_str.push_str(&format!("id: {}\n", event.id));
+    response_str.push_str("\n");
+
+    writer.write_all(response_str.as_bytes()).await?;
+    writer.flush().await?;
+    // eprintln!("{loop_id}: Sent event");
     Ok(())
 }

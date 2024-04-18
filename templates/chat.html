@@ -10,6 +10,21 @@
   var noMoreOldMessages = false;
 
   var current_chat_id = null;
+
+  function fromHTML(html) {
+    if (!html) return null;
+
+    // Then set up a new template element.
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const result = template.content.children;
+
+    // Then return either an HTMLElement or HTMLCollection,
+    // based on whether the input HTML had one or more roots.
+    if (result.length === 1) return result[0];
+    return result;
+  }
+
   function updateCurrentChat() {
     if (current_chat_id) {
       let previousChat = document.getElementById("chat_" + current_chat_id);
@@ -124,19 +139,25 @@
       container.setAttribute("class", "messageContainer");
 
       let el = document.createElement("div");
-      switch (msg.type) {
-        case "In":
-          el.setAttribute("class", "messageIn");
-          break;
-        case "Out":
-          el.setAttribute("class", "messageOut");
-          break;
-        default:
-          console.error("Unexpected message type: " + msg.type);
+      if (msg.to === current_chat_id) {
+        el.setAttribute("class", "messageOut");
+      } else {
+        el.setAttribute("class", "messageIn");
       }
+
+      let el_message_text = document.createElement("div");
       let messageText = document.createTextNode(msg.message);
-      el.appendChild(messageText);
-      
+      el_message_text.appendChild(messageText);
+
+      el.appendChild(el_message_text);
+
+      let el_timestamp = document.createElement("div");
+      el_timestamp.setAttribute("class", "messageTimestamp");
+      let timestampText = document.createTextNode(msg.timestamp);
+      el_timestamp.appendChild(timestampText);
+
+      el.appendChild(el_timestamp);
+
       container.appendChild(el);
 
       messages.appendChild(container);
@@ -155,24 +176,81 @@
       };
   }
 
+  function setUpEventSource() {
+      if (!window.EventSource) {
+          // Internet Explorer или устаревшие браузеры
+          alert("Ваш браузер не поддерживает EventSource.");
+          return;
+      }
+
+      newMessagesEventSource = new EventSource('/subscribe/new_messages');
+
+      newMessagesEventSource.onmessage = function(e) {
+        let message = JSON.parse(e.data);
+        let thisUserId = userId();
+        if (((message.from === current_chat_id) && (message.to === thisUserId)) 
+            || ((message.to === current_chat_id) && (message.from === thisUserId))) {
+          
+          messagesBuffer.push(message);
+          redrawMessages(false);
+        }
+
+        if (document.getElementById("chatSearchBox").value === "") // make sure we aren't in chat search mode
+        {
+          let messageChatId = (message.from === thisUserId) ? message.to : message.from;
+          moveChatToTop(messageChatId);
+        }
+      };
+  }
+
+  function userId() {
+    //TODO questionable solution
+    return document.getElementById("userId").innerText;
+  }
+
+  async function moveChatToTop(messageChatId) {
+    let chat_el = await popOrFetchChatNode(messageChatId);
+    
+    let el_chats = document.getElementById("chats");
+    el_chats.insertBefore(chat_el, el_chats.firstChild);
+  }
+
+  async function popOrFetchChatNode(chatId) {
+    let el_id = "chat_" + chatId;
+    let old_el = document.getElementById(el_id);
+    if (old_el !== null) {
+      return document.getElementById("chats").removeChild(old_el);
+    };
+
+    let chat_html_response = await fetch("/html/chat/" + chatId, {
+      method: "GET"
+    });
+    let chat_html = await chat_html_response.text();
+    return fromHTML(chat_html);
+  }
+
   addEventListener("load", function (e) {
     updateCurrentChat();
+
+    setUpEventSource();
 
     document.getElementById("send_button").addEventListener("click", async function () {
       if (!document.getElementById("replyForm").reportValidity()) {
         return;
       }
 
+      let message_text = document.getElementById("message_box").value;
+
       await fetch("/message/" + current_chat_id, {
         method: "POST",
         body: JSON.stringify({
-          message: document.getElementById("message_box").value
+          message: message_text
         })
       });
 
       document.getElementById("message_box").value = "";
 
-      loadMessages();
+      // loadMessages();
     });
 
     document.getElementById("chatSearchButton").addEventListener("click", async function () {
@@ -199,7 +277,7 @@
 
   addEventListener("popstate", function (e) {
     updateCurrentChat();
-  })
+  });
 </script>
 <style>
   body {
@@ -309,6 +387,7 @@
     padding-top: 0.5rem;
     padding-left: 0.5rem;
     padding-bottom: 0.5rem;
+    padding-right: 0.5rem;
     background-color: rgb(241, 238, 220);
   }
 
@@ -320,7 +399,14 @@
     padding-top: 0.5rem;
     padding-left: 0.5rem;
     padding-bottom: 0.5rem;
+    padding-right: 0.5rem;
     background-color: rgb(241, 238, 220);
+  }
+
+  div.messageTimestamp {
+    font-size: 1rem;
+    color: rgb(179, 200, 207);
+    text-align: right;
   }
 
   #loadMoreOldMessages {
@@ -352,6 +438,7 @@
 </style>
 
 <body>
+  <div id="userId" hidden>{{ user_id }}</div>
   <div class="chat_container">
     <div class="greeting">Привет, {{ username }} <a href="/logout">выйти</a></div>
     <div class="leftColumn">

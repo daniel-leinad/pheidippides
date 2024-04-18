@@ -17,9 +17,11 @@ Pheidippides was a **messenger** from ancient Greece: https://en.wikipedia.org/w
 Application has a layered architecture:
 
 ```
-Web server - responsible for handling requests and client rendering (pheidippides::routing)
+Web server - responsible for handling requests, client-side rendering, session info and input validaiton (crate::routing)
 ↓
-Database access - talks to the database: responsible for reading and modifying stored data (pheidippides::db)
+Application - responsible for all the logic related to modifying and reading stored data (crate::app)
+↓
+Database access - talks to the database: responsible for reading and modifying stored data (crate::db)
 ↓
 DBMS (Postgres) - the database itself
 ```

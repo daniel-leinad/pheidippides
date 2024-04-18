@@ -77,6 +77,11 @@ impl<'a> HttpResponseBuilder<'a> {
         self.headers.insert(CaseInsensitiveString::from("Content-Type"), "application/json; charset=utf-8".to_owned());
         self
     }
+
+    pub fn content_event_stream(&mut self) -> &mut Self {
+        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "text/event-stream; charset=utf-8".to_owned());
+        self
+    }
 }
 
 pub enum HttpStatusCode {

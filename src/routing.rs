@@ -1,11 +1,15 @@
 mod html;
 mod json;
+mod tools;
 
-use anyhow::{Context, Result};
-use super::{sessions, serde_form_data, authorization};
+use anyhow::Result;
+use tokio::io::AsyncRead;
+use super::{sessions, serde_form_data};
 use super::db;
-use crate::db::DbAccess;
-use crate::http::{self, Request, Response};
+use crate::app::App;
+use crate::async_utils;
+use crate::db::{DbAccess, MessageId};
+use crate::http::{self, EventSourceEvent, Request, Response};
 use crate::utils::CaseInsensitiveString;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,12 +17,12 @@ use super::utils::{log_internal_error, get_cookies_hashmap, header_set_cookie};
 
 #[derive(Clone)]
 pub struct RequestHandler<D: db::DbAccess> {
-    db_access: D,
+    app: App<D>,
 }
 
 impl<D: db::DbAccess> RequestHandler<D> {
     pub fn new(db_access: D) -> Self {
-        RequestHandler { db_access }
+        RequestHandler { app: App::new(db_access) }
     }
 }
 
@@ -41,15 +45,15 @@ impl std::fmt::Display for RequestHandlerError {
 
 impl std::error::Error for RequestHandlerError {}
 
-impl<D: db::DbAccess> http::RequestHandler for RequestHandler<D> {
+impl<D: db::DbAccess, T: AsyncRead + Unpin + Sync + Send> http::RequestHandler<Request<T>> for RequestHandler<D> {
     type Error = RequestHandlerError;
 
-    fn handle(self, request: &mut Request) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
-        handle_request(request, self.db_access)
+    fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
+        handle_request(request, self.app)
     }
 }
 
-pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response, RequestHandlerError> {
+pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DbAccess>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -81,16 +85,18 @@ pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess)
         (Get, None, ..) => main_page(request),
         (Get, Some("login"), None, ..) => authorization_page().await,
         (Get, Some("signup"), None, ..) => signup_page().await,
-        (Post, Some("signup"), None, ..) => signup(request, db_access).await,
+        (Post, Some("signup"), None, ..) => signup(request, app).await,
         (Get, Some("logout"), None, ..) => logout(request),
-        (Post, Some("authorize"), None, ..) => authorization(request, db_access).await,
-        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, db_access, chat_id).await,
-        (Post, Some("message"), Some(receiver), None, ..) => send_message(request, db_access, receiver).await,
-        (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, db_access).await,
-        (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(db_access, params).await,
-        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, db_access, chat_id, params).await,
+        (Post, Some("authorize"), None, ..) => authorization(request, app).await,
+        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, app, chat_id).await,
+        (Post, Some("message"), Some(receiver), None, ..) => send_message(request, app, receiver).await,
+        (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, app).await,
+        (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(app, params).await,
+        (Get, Some("html"), Some("chat"), Some(chat_id), ..) => html::chat_html_response(app, chat_id).await,
+        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
+        (Get, Some("subscribe"), Some("new_messages"), None, ..) => subscribe_new_messages(request, app, params).await,
+        (Get, Some("tools"), Some("event_source"), None, ..) => tools::event_source(request),
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
-        (Get, Some("users"), None, ..) => get_users_debug(db_access).await,
         _ => Ok(Response::BadRequest),
     };
 
@@ -104,21 +110,7 @@ pub async fn handle_request(request: &mut Request, db_access: impl db::DbAccess)
     // request.respond(response)
 }
 
-async fn get_users_debug(db_access: impl db::DbAccess) -> Result<Response> {
-    let mut res = String::new();
-
-    for user_info in db_access.users().await.context("Couldn't fetch users")? {
-        res.push_str(&user_info.0.to_string());
-        res.push_str(" ");
-        res.push_str(&user_info.1);
-        res.push_str("\n");
-    };
-
-    Ok(Response::Text { text: res, headers: vec![] })
-
-}
-
-fn main_page(request: &Request) -> Result<Response> {
+fn main_page<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
     let headers = request.headers();
 
     match get_authorization(headers)? {
@@ -127,13 +119,12 @@ fn main_page(request: &Request) -> Result<Response> {
     }
 }
 
-async fn chat_page<D: DbAccess>(
-    request: &Request,
-    db_access: D,
+async fn chat_page<D: DbAccess, T: AsyncRead + Unpin>(
+    request: &Request<T>,
+    app: App<D>,
     _chat_id: Option<&str>,
 ) -> Result<Response> {
     
-
     let headers = request.headers();
 
     let user_id = match get_authorization(headers)? {
@@ -141,7 +132,7 @@ async fn chat_page<D: DbAccess>(
         None => return Ok(unauthorized_redirect()),
     };
 
-    let chat_page = html::chat_page(&db_access, &user_id).await?;
+    let chat_page = html::chat_page(&app, &user_id).await?;
 
     Ok(Response::Html {
         content: chat_page,
@@ -163,7 +154,7 @@ async fn signup_page() -> Result<Response> {
     Ok(Response::Html { content , headers })
 }
 
-fn logout(request: &Request) -> Result<Response> {
+fn logout<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
     let headers = request.headers();
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
@@ -185,7 +176,7 @@ struct AuthorizationParams {
     password: String,
 }
 
-async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response> {
+async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DbAccess>) -> Result<Response> {
     let content = request.content().await?;
 
     let authorization_params: AuthorizationParams =
@@ -196,26 +187,19 @@ async fn authorization(request: &mut Request, db_access: impl db::DbAccess) -> R
                 return Ok(Response::BadRequest);
             }
         };
+    
+    let user_verification = app.verify_user(&authorization_params.login, authorization_params.password).await?;
 
-    let user_id = match db_access
-        .user_id(&authorization_params.login).await
-        .with_context(|| format!("Couldn't fetch user_id of {}", &authorization_params.login))?
-    {
-        Some(user_id) => user_id,
-        None => return failed_login_response().await,
-    };
+    match user_verification {
+        Some(user_id) => {
+            let session_id = sessions::generate_session_id();
+            sessions::update_session_info(session_id.clone(), sessions::SessionInfo { user_id })?;
+            let location = "/chat".into();
+            let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
 
-    if authorization
-        ::verify_user(&user_id, authorization_params.password, &db_access).await
-        .with_context(|| format!("Authorization error: couldn't verify user {}", &user_id))? {
-        let session_id = sessions::generate_session_id();
-        sessions::update_session_info(session_id.clone(), sessions::SessionInfo { user_id })?;
-        let location = "/chat".into();
-        let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
-
-        Ok(Response::Redirect { location , headers })
-    } else {
-        failed_login_response().await
+            Ok(Response::Redirect { location , headers })
+        }
+        None => failed_login_response()
     }
 }
 
@@ -230,7 +214,7 @@ enum SignupError {
     UsernameTaken,
 }
 
-async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<Response> {
+async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl DbAccess>) -> Result<Response> {
     let content = request.content().await?;
     let auth_params: AuthorizationParams = match serde_json::from_str(&content) {
         Ok(auth_params) => auth_params,
@@ -240,24 +224,19 @@ async fn signup(request: &mut Request, db_access: impl db::DbAccess) -> Result<R
         }
     };
 
-    let user_id = match db_access
-        .create_user(&auth_params.login).await
-        .with_context(|| format!("Couldn't create user {}", &auth_params.login))? {
-        Some(user_id) => user_id,
+    match app.create_user(&auth_params.login, auth_params.password).await? {
+        Some(user_id) => {
+            let signup_response = serde_json::json!(SignupResponse{ success: true, errors: vec![] });
+            let session_id = sessions::generate_session_id();
+            let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
+            sessions::update_session_info(session_id, sessions::SessionInfo{ user_id })?;
+            Ok(Response::Json{ content: signup_response.to_string(), headers })
+        },
         None => {
             let signup_response = SignupResponse{ success: false, errors: vec![SignupError::UsernameTaken] };
-            return Ok(Response::Json{content: serde_json::json!(signup_response).to_string(), headers: vec![]})
+            Ok(Response::Json{content: serde_json::json!(signup_response).to_string(), headers: vec![]})
         },
-    };
-
-    authorization::create_user(&user_id, auth_params.password, &db_access).await.with_context(
-        || format!("Authoriazation error: couldn't create user {}", &auth_params.login))?;
-
-    let signup_response = serde_json::json!(SignupResponse{ success: true, errors: vec![] });
-    let session_id = sessions::generate_session_id();
-    let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
-    sessions::update_session_info(session_id, sessions::SessionInfo{ user_id })?;
-    Ok(Response::Json{ content: signup_response.to_string(), headers })
+    }
 }
 
 #[derive(Deserialize)]
@@ -265,7 +244,7 @@ struct SendMessageParams {
     message: String,
 }
 
-async fn send_message<D: db::DbAccess>(request: &mut Request, db_access: D, receiver: &str) -> Result<Response> {
+async fn send_message<D: db::DbAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<D>, receiver: &str) -> Result<Response> {
 
     let receiver: db::UserId = match receiver.parse() {
         Ok(res) => res,
@@ -288,12 +267,12 @@ async fn send_message<D: db::DbAccess>(request: &mut Request, db_access: D, rece
         },
     };
 
-    db_access.create_message(params.message, &user_id, &receiver).await.with_context(|| format!("Couldn't create message from {user_id} to {receiver}"))?;
+    app.send_message(params.message, user_id, receiver).await?;
 
     Ok(Response::Html { content: "ok.".to_owned(), headers: Vec::new() })
 }
 
-async fn failed_login_response() -> Result<Response> {
+fn failed_login_response() -> Result<Response> {
     let content = html::login_fail_page()?;
     Ok(Response::Html {
         content,
@@ -301,10 +280,64 @@ async fn failed_login_response() -> Result<Response> {
     })
 }
 
+#[derive(Deserialize)]
+struct SubscribeNewMessagesParams {
+    last_message_id: Option<String>,
+}
+
+async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl DbAccess>, params: &str) -> Result<Response> {
+    let user_id = match get_authorization(request.headers())? {
+        Some(user_id) => user_id, 
+        None => return Ok(Response::BadRequest)
+    };
+
+    let subscribe_new_messages_params: SubscribeNewMessagesParams = match serde_form_data::from_str(params) {
+        Ok(res) => res,
+        Err(_) => return Ok(Response::BadRequest),
+    };
+
+    let last_message_id_params = match subscribe_new_messages_params.last_message_id {
+        Some(s) => {
+            match s.parse() {
+                Ok(res) => Some(res),
+                Err(_) => return Ok(Response::BadRequest),
+            }
+        },
+        None => None,
+    };
+
+    let last_message_id_header: Option<MessageId> = match request.headers().get(&CaseInsensitiveString::from("Last-Event-ID")) {
+        Some(header_value) => {
+            match header_value.parse() {
+                Ok(last_event_id) => Some(last_event_id),
+                Err(_) => return Ok(Response::BadRequest),
+            }
+        },
+        None => None,
+    };
+
+    let starting_point = last_message_id_header.or(last_message_id_params);
+
+    let subscription = app.subscribe_new_messages(user_id, starting_point).await?;
+
+    let stream = async_utils::pipe_unbounded_channel(
+        subscription, 
+        |message| {
+            Some(EventSourceEvent { 
+                data: serde_json::json!(message).to_string(),
+                id: message.id.to_string(), 
+                event: None,
+            })
+    });
+
+    Ok(Response::EventSource { retry: None, stream })
+}
+
 fn unauthorized_redirect() -> Response {
     Response::Redirect{location: "/login".into(), headers: Vec::new()}
 }
 
+// TODO return 'static reference for optimisation?
 fn get_authorization(headers: &HashMap<CaseInsensitiveString, String>) -> Result<Option<db::UserId>> {
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,

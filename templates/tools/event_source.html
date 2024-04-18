@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Debug event source</title>
+</head>
+<script>
+    var eventSource = null;
+    function connect() {
+        if (!window.EventSource) {
+          // Internet Explorer или устаревшие браузеры
+          alert("Ваш браузер не поддерживает EventSource.");
+          return;
+      }
+
+      if (eventSource) {
+        eventSource.close();
+      };
+
+      let event_source_url = document.getElementById("url").value;
+      eventSource = new EventSource(event_source_url);
+      let events_el = document.getElementById("events");
+      events_el.innerHTML = "";
+
+      eventSource.onmessage = function(e) {
+        let el = document.createElement("div");
+        
+        let data_header = document.createElement("p");
+        data_header.appendChild(document.createTextNode("Data:"));
+        
+        let data_el = document.createElement("p");
+        data_el.appendChild(document.createTextNode(e.data));
+        
+        let br_el = document.createElement("br");
+
+        let id_el = document.createElement("p");
+        id_el.appendChild(document.createTextNode("Id: " + e.id));
+        
+        el.appendChild(data_header);
+        el.appendChild(data_el);
+        el.appendChild(id_el);
+        el.appendChild(br_el);
+
+        events_el.appendChild(el);
+      };
+    }
+</script>
+<body>
+    <p><input type="text" id="url"><button onclick="connect();">Connect</button></p>
+    <div id="events"></div>
+</body>
+</html>
