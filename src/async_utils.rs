@@ -98,30 +98,3 @@ pub fn redirect_unbounded_channel<T: 'static + Send>(mut from: UnboundedReceiver
         }
     });
 }
-
-// pub fn redirect_broadcast<T: 'static + Send + Clone>(mut from: broadcast::Receiver<T>, to: UnboundedSender<T>) {
-//     tokio::spawn(async move {
-//         loop {
-//             tokio::select! {
-//                 _ = to.closed() => {
-//                     // receiver is dropped, drop sender
-//                     break;
-//                 },
-
-//                 message_res = from.recv() => {
-//                     let message = match message_res {
-//                         Ok(message) => message,
-//                         Err(_) => {
-//                             // previous sender is dropped, drop sender
-//                             break
-//                         },
-//                     };
-//                     if let Err(_) = to.send(message) {
-//                         // receiver is dropped, drop sender
-//                         break
-//                     }
-//                 },
-//             }
-//         }
-//     });
-// }

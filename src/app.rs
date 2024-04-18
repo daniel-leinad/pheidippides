@@ -4,10 +4,10 @@ use anyhow::{Context, Result, bail};
 use tokio::sync::mpsc;
 use crate::{async_utils, authorization};
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 // use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::broadcast::Sender;
 
 const SUBSCRIPTION_GARBAGE_COLLECTION_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -175,11 +175,11 @@ impl<D: DbAccess> App<D> {
             Some(starting_point) => {
                 let previous_messages = self.db_access.users_messages_since(&user_id, &starting_point).await?;
                 let (sender, receiver) = mpsc::unbounded_channel();
-                
+
                 let mut sent_messages = HashSet::new();
                 for message in previous_messages {
                     sent_messages.insert(message.id);
-                    sender.send(message);
+                    sender.send(message)?; // Receiver can't be dropped at this point, if .send() returns an error, propagate it back for debugging
                 };
 
                 let subscription_filtered = async_utils::pipe_broadcast(subscription, move |message| {

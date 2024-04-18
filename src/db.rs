@@ -157,12 +157,10 @@ impl FromStr for AuthenticationInfo {
 
 #[cfg(test)]
 mod tests {
-    use std::{future::Future, time::Duration};
+    use std::time::Duration;
 
     use super::{DbAccess, Message};
-    use anyhow::{Result, Context, ensure};
-    use chrono::DateTime;
-    use uuid::{timestamp, uuid, Uuid};
+    use uuid::uuid;
 
     #[macro_export]
     macro_rules! db_access_tests {

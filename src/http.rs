@@ -2,9 +2,9 @@ mod http_response;
 
 use std::{collections::HashMap, str::FromStr};
 
-use anyhow::{Result, Context, bail};
+use anyhow::{Result, Context};
 use std::time::Duration;
-use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, Interest, AsyncRead, AsyncWrite}, net::TcpStream, sync::mpsc::UnboundedReceiver};
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, AsyncRead}, net::TcpStream, sync::mpsc::UnboundedReceiver};
 use tokio_util::sync::CancellationToken;
 
 use crate::utils::{self, log_internal_error, CaseInsensitiveString};

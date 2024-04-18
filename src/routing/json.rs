@@ -6,7 +6,7 @@ use crate::http::{Request, Response};
 use crate::app::App;
 use serde::{Serialize, Deserialize};
 use super::get_authorization;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::AsyncRead;
 
 #[derive(Deserialize, Debug)]
 struct MessagesUrlParams {

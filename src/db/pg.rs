@@ -1,11 +1,11 @@
 use std::future::Future;
 
 use sqlx::postgres::PgConnectOptions;
-use sqlx::{database, query, Execute, Executor, PgPool, Row};
+use sqlx::{query, Executor, PgPool, Row};
 use tokio::task::JoinError;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use anyhow::{Context, Result, bail};
 use thiserror::Error;
 
@@ -159,10 +159,10 @@ impl DbAccess for Db {
         query_builder.push(r#"
             select id, sender, receiver, message, timestamp
             from messages
-            where ((receiver = "#).push_bind(dbg!(user_id_1))
-        .push(" and sender = ").push_bind(dbg!(user_id_2))
-        .push(") or (receiver = ").push_bind(dbg!(user_id_2))
-        .push(" and sender = ").push_bind(dbg!(user_id_1))
+            where ((receiver = "#).push_bind(user_id_1)
+        .push(" and sender = ").push_bind(user_id_2)
+        .push(") or (receiver = ").push_bind(user_id_2)
+        .push(" and sender = ").push_bind(user_id_1)
         .push("))");
         
         if let Some(starting_point) = starting_point {
@@ -172,17 +172,16 @@ impl DbAccess for Db {
             if let Some(pg_row) = msg_timestamp {
                 let msg_timestamp: DateTime<chrono::Utc> = pg_row.get(0);
                 query_builder
-                    .push(" and ((timestamp, id) < (").push_bind(dbg!(msg_timestamp))
-                    .push(", ").push_bind(dbg!(starting_point))
+                    .push(" and ((timestamp, id) < (").push_bind(msg_timestamp)
+                    .push(", ").push_bind(starting_point)
                     .push("))");
             }
         }
 
         query_builder.push(" order by timestamp desc");
-        query_builder.push(" limit ").push_bind(dbg!(MESSAGE_LOAD_BUF_SIZE));
+        query_builder.push(" limit ").push_bind(MESSAGE_LOAD_BUF_SIZE);
 
         let query = query_builder.build();
-        dbg!(query.sql());
         let res = conn.fetch_all(query).await?
             .iter()
             .map(|row| {
@@ -191,7 +190,7 @@ impl DbAccess for Db {
                 let to: UserId = row.get(2);
                 let message: String = row.get(3);
                 let timestamp: DateTime<chrono::Utc> = row.get(4);
-                dbg!(Message{ id, from, to, message, timestamp })
+                Message{ id, from, to, message, timestamp }
             })
             .collect();
         Ok(res)
@@ -328,7 +327,7 @@ impl DbAccess for Db {
             from messages
             where ((receiver = $1) or (sender = $1)) and ((timestamp, id) > ($2, $3))
             order by timestamp
-        "#).bind(dbg!(user_id)).bind(dbg!(msg_timestamp)).bind(dbg!(starting_point))).await?
+        "#).bind(user_id).bind(msg_timestamp).bind(starting_point)).await?
         .into_iter()
         .map(|row| {
             let id: MessageId = row.get(0);
@@ -336,7 +335,7 @@ impl DbAccess for Db {
             let to: UserId = row.get(2);
             let message: String = row.get(3);
             let timestamp: DateTime<chrono::Utc> = row.get(4);
-            dbg!(Message{ id, from, to, message, timestamp })
+            Message{ id, from, to, message, timestamp }
         })
         .collect();
 
@@ -363,8 +362,6 @@ fn pg_id(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use sqlx::PgPool;
-
     use super::*;
 
     #[test]

@@ -3,18 +3,16 @@ mod json;
 mod tools;
 
 use anyhow::Result;
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::io::AsyncRead;
 use super::{sessions, serde_form_data};
 use super::db;
 use crate::app::App;
-use crate::{async_utils, authorization};
+use crate::async_utils;
 use crate::db::{DbAccess, MessageId};
 use crate::http::{self, EventSourceEvent, Request, Response};
 use crate::utils::CaseInsensitiveString;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
 use super::utils::{log_internal_error, get_cookies_hashmap, header_set_cookie};
 
 #[derive(Clone)]
@@ -295,22 +293,14 @@ async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app:
 
     let subscribe_new_messages_params: SubscribeNewMessagesParams = match serde_form_data::from_str(params) {
         Ok(res) => res,
-        Err(e) => {
-            //TODO this is temporary
-            log_internal_error(e);
-            return Ok(Response::BadRequest)
-        },
+        Err(_) => return Ok(Response::BadRequest),
     };
 
     let last_message_id_params = match subscribe_new_messages_params.last_message_id {
         Some(s) => {
             match s.parse() {
                 Ok(res) => Some(res),
-                Err(e) => {
-                    //TODO this is temporary
-                    log_internal_error(e);
-                    return Ok(Response::BadRequest)
-                }
+                Err(_) => return Ok(Response::BadRequest),
             }
         },
         None => None,
@@ -320,11 +310,7 @@ async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app:
         Some(header_value) => {
             match header_value.parse() {
                 Ok(last_event_id) => Some(last_event_id),
-                Err(e) => {
-                    //TODO this is temporary
-                    log_internal_error(e);
-                    return Ok(Response::BadRequest)
-                },
+                Err(_) => return Ok(Response::BadRequest),
             }
         },
         None => None,
@@ -332,38 +318,7 @@ async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app:
 
     let starting_point = last_message_id_header.or(last_message_id_params);
 
-    let subscription = app.subscribe_new_messages(user_id, dbg!(starting_point)).await?;
-
-    // let (sender, receiver) = unbounded_channel();
-
-    // tokio::spawn(async move {
-    //     loop {
-    //         tokio::select! {
-    //             _ = sender.closed() => {
-    //                 break;
-    //             },
-
-    //             message_res = subscription.recv() => {
-    //                 let message = match message_res {
-    //                     Ok(message) => message,
-    //                     Err(e) => {
-    //                         log_internal_error(e);
-    //                         break
-    //                     },
-    //                 };
-    //                 let event_source_event = EventSourceEvent { 
-    //                     data: serde_json::json!(message).to_string(),
-    //                     id: message.id.to_string(), 
-    //                     event: None,
-    //                 };
-    //                 if let Err(_) = sender.send(event_source_event) {
-    //                     // Client has disconnected
-    //                     break
-    //                 }
-    //             },
-    //         }
-    //     }
-    // });
+    let subscription = app.subscribe_new_messages(user_id, starting_point).await?;
 
     let stream = async_utils::pipe_unbounded_channel(
         subscription, 

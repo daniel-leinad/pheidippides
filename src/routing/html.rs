@@ -6,7 +6,7 @@ use crate::http::{Request, Response};
 use serde::Deserialize;
 use super::get_authorization;
 use askama::Template;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::AsyncRead;
 
 #[derive(Template)]
 #[template(path = "chat.html")]

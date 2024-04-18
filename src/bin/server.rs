@@ -1,5 +1,3 @@
-use std::future::Future;
-
 use anyhow::{Context, Result};
 use clap::Parser;
 
@@ -42,13 +40,7 @@ async fn main() -> Result<()> {
 
         db_graceful_shutdown.await.context("Join error in thread handling database connection shutdown")?;
     }
-
-    // let request_handler = routing::RequestHandler::new(db_access.clone());
-
-    // http::run_server(&addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {addr}"))?;
     
-    // db_graceful_shutdown.await.context("Join error in thread handling database connection shutdown")?;
-
     Ok(())
 }
 

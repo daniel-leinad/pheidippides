@@ -8,6 +8,6 @@ use crate::http::{Request, Response};
 #[template(path = "tools/event_source.html")]
 struct EventSourcePage {}
 
-pub fn event_source<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
+pub fn event_source<T: AsyncRead + Unpin>(_request: &Request<T>) -> Result<Response> {
     Ok(Response::Html { content: EventSourcePage{}.render()?, headers: vec![] })
 }

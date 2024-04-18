@@ -185,25 +185,7 @@
 
       newMessagesEventSource = new EventSource('/subscribe/new_messages');
 
-      // eventSource.onopen = function(e) {
-      //     console.log("Событие: open");
-      // };
-
-      // eventSource.onerror = function(e) {
-      //     console.log("Событие: error");
-      //     if (this.readyState == EventSource.CONNECTING) {
-      //         console.log(`Переподключение (readyState=${this.readyState})...`);
-      //     } else {
-      //         console.log("Произошла ошибка.");
-      //     }
-      // };
-
-      // eventSource.addEventListener('bye', function(e) {
-      //     console.log("Событие: bye, данные: " + e.data);
-      // });
-
       newMessagesEventSource.onmessage = function(e) {
-        console.log("eventsource = " + e);
         let message = JSON.parse(e.data);
         let thisUserId = userId();
         if (((message.from === current_chat_id) && (message.to === thisUserId)) 
@@ -296,10 +278,6 @@
   addEventListener("popstate", function (e) {
     updateCurrentChat();
   });
-
-  // addEventListener("beforeunload", function(e) {
-  //   newMessagesEventSource.close();
-  // });
 </script>
 <style>
   body {

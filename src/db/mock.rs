@@ -1,5 +1,3 @@
-use uuid::timestamp;
-
 use crate::authorization;
 
 use super::*;
