@@ -111,7 +111,7 @@ impl Db {
 
         let credentials = [
             (username_id_map["User1"], "User1"),
-            (username_id_map["User2"], "123"),
+            (username_id_map["User2"], "User2"),
         ];
 
         for (user_id, password) in credentials {
