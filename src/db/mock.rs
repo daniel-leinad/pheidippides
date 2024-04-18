@@ -61,10 +61,10 @@ pub struct Db {
 impl Db {
     pub async fn new() -> Self {
         let mut users_vec = vec![
-            (uuid::Uuid::new_v4(), "Dan".into()),
-            (uuid::Uuid::new_v4(), "Man".into()),
-            (uuid::Uuid::new_v4(), "John".into()),
-            (uuid::Uuid::new_v4(), "Разговорчивый".into()),
+            (uuid::Uuid::new_v4(), "User1".into()),
+            (uuid::Uuid::new_v4(), "User2".into()),
+            (uuid::Uuid::new_v4(), "User3".into()),
+            (uuid::Uuid::new_v4(), "Пользователь1".into()),
         ];
 
         for i in 5..100 {
@@ -77,14 +77,14 @@ impl Db {
         }
 
         let messages_vec = vec![
-            ("Dan", "Dan", "Привет!"),
-            ("Dan", "Dan", "Ой, я написал самому себе..."),
-            ("Man", "Dan", "Hey"),
-            ("Dan", "Man", "Hey, man.."),
-            ("Man", "Dan", "Actually, I AM Man..."),
-            ("Dan", "Man", "Right... 😂😂😂"),
-            ("Dan", "John", "Hey, John, like your new song!"),
-            ("John", "Dan", "Thanks, it's very popular, can you imagine that?"),
+            ("User1", "User1", "Hello myself 1"),
+            ("User1", "User1", "Hello myself 2"),
+            ("User2", "User1", "Hello 1"),
+            ("User1", "User2", "Hello 2"),
+            ("User2", "User1", "Hello 3"),
+            ("User1", "User2", "Hello 4 😊"),
+            ("User1", "User3", "Hello 5"),
+            ("User3", "User1", "Hello 6"),
         ];
 
         let mut messages_vec = {
@@ -97,12 +97,12 @@ impl Db {
 
         for i in 0..100 {
             // messages_vec.push(MessageRecord { from: "4".into(), to: "1".into(), message: format!("Привет! ({i})") })
-            messages_vec.push(MessageRecord::new(username_id_map["Разговорчивый"], username_id_map["Dan"], &format!("Привет! ({i})")));
+            messages_vec.push(MessageRecord::new(username_id_map["Пользователь1"], username_id_map["User1"], &format!("Привет! ({i})")));
         };
 
         for (user_id, _) in users_vec.iter().skip(4) {
             // messages_vec.push(MessageRecord { from: user_id.clone(), to: "1".into(), message: "Привет".into() })
-            messages_vec.push(MessageRecord::new(*user_id, username_id_map["Dan"], "Привет"));
+            messages_vec.push(MessageRecord::new(*user_id, username_id_map["User1"], "Привет"));
         };
 
         let users = Arc::new(Mutex::new(users_vec));
@@ -112,8 +112,8 @@ impl Db {
         let res = Db { users, messages, auth };
 
         let credentials = [
-            (username_id_map["Dan"], "Dan"),
-            (username_id_map["Man"], "123"),
+            (username_id_map["User1"], "User1"),
+            (username_id_map["User2"], "123"),
         ];
 
         for (user_id, password) in credentials {
