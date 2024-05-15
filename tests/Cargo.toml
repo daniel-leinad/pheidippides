@@ -5,10 +5,10 @@ edition = "2021"
 publish = false
 
 [dev-dependencies]
-pheidippides-messenger = { path = "../pheidippides-messenger" }
-pheidippides-web = { path = "../pheidippides-web" }
-web-server = { path = "../web-server" }
-mock-db = { path = "../mock-db" }
+pheidippides-messenger = { path = "../lib/pheidippides-messenger" }
+pheidippides-web = { path = "../lib/pheidippides-web" }
+web-server = { path = "../lib/web-server" }
+mock-db = { path = "../lib/mock-db" }
 tokio = "1.37.0"
 tokio-test = "0.4.4"
 

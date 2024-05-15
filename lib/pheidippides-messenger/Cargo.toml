@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-pheidippides-utils = {path="../pheidippides-utils"}
+pheidippides-utils = {path= "../pheidippides-utils" }
 
 anyhow = "1.0.83"
 argon2 = "0.5.3"

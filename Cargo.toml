@@ -1,14 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "pheidippides-messenger",
-    "pheidippides-utils",
-    "pheidippides-web",
-    "web-server",
-    "postgres-db",
-    "mock-db",
-
-    "pheidippides-db-tests",
+    "lib/pheidippides-messenger",
+    "lib/pheidippides-utils",
+    "lib/pheidippides-web",
+    "lib/web-server",
+    "lib/postgres-db",
+    "lib/mock-db",
+    "lib/pheidippides-db-tests",
     "tests",
     
     "bin/server",

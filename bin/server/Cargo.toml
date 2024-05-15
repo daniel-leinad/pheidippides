@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-pheidippides-messenger = {path= "../../pheidippides-messenger" }
-pheidippides-web = {path="../../pheidippides-web"}
-web-server = {path = "../../web-server"}
-postgres-db = {path = "../../postgres-db"}
-mock-db = {path = "../../mock-db"}
+pheidippides-messenger = {path= "../../lib/pheidippides-messenger" }
+pheidippides-web = {path= "../../lib/pheidippides-web" }
+web-server = {path = "../../lib/web-server"}
+postgres-db = {path = "../../lib/postgres-db" }
+mock-db = {path = "../../lib/mock-db" }
 
 anyhow = "1.0.83"
 clap = { version = "4.5.4", features = ["derive"] }
