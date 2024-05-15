@@ -95,7 +95,10 @@ impl<D: DataAccess> App<D> {
     }
 
     pub async fn username(&self, user_id: &UserId) -> Result<Option<String>> {
-        self.db_access.username(user_id).await.with_context(|| format!("Couldn't fetch username for id {user_id}"))
+        let user = self.db_access
+                .fetch_user(user_id).await
+                .with_context(|| format!("Couldn't fetch username for id {user_id}"))?;
+        Ok(user.map(|user| user.username))
     }
 
     pub async fn send_message(&self, message_text: String, from: UserId, to: UserId) -> Result<MessageId> {

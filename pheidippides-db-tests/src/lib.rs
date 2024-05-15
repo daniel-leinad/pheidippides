@@ -20,12 +20,12 @@ pub async fn it_creates_user(db_access: &impl DataAccess) {
     let user_id = db_access.create_user(username).await
         .unwrap()
         .unwrap();
-    assert_eq!(db_access.username(&user_id).await.unwrap().unwrap(), username);
+    assert_eq!(db_access.fetch_user(&user_id).await.unwrap().unwrap().username, username);
     assert_eq!(db_access.find_user_by_username(username).await.unwrap().unwrap(), user_id);
 }
 
 pub async fn doesnt_fetch_nonexistent_users(db_access: &impl DataAccess) {
-    assert!(db_access.username(&uuid!("4ec09097-45d5-43a0-bdea-614948bce47e")).await.unwrap().is_none());
+    assert!(db_access.fetch_user(&uuid!("4ec09097-45d5-43a0-bdea-614948bce47e")).await.unwrap().is_none());
     assert!(db_access.find_user_by_username("__NonExistentUserOnlyForTesting").await.unwrap().is_none());
 }
 

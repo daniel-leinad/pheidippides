@@ -280,14 +280,6 @@ impl DataAccess for Db {
         Ok(Some(user_id))
     }
 
-    async fn username(&self, user_id: &UserId) -> Result<Option<String>, Error> {
-        let mut conn = self.pool.acquire().await?;
-        let res = conn.fetch_optional(query(r#"
-            select username from users where user_id = $1
-        "#).bind(user_id)).await?;
-        Ok(res.map(|row| row.get(0)))
-    }
-
     async fn find_user_by_username(&self, requested_username: &str) -> Result<Option<UserId>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_optional(query(r#"

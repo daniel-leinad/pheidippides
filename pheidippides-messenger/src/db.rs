@@ -27,17 +27,6 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
     fn fetch_authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
     fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
     fn create_user(&self, username: &str) -> async_result!(Option<UserId>);
-    
-    fn username(&self, user_id: &UserId) -> async_result!(Option<String>) {
-        async move {
-            let users = self.fetch_users().await?;
-            let res = users  
-                .into_iter()
-                .filter_map(|(id, username)| {if &id == user_id {Some(username)} else {None}})
-                .next();
-            Ok(res)
-        }
-    }
 
     fn find_user_by_username(&self, requested_username: &str) -> async_result!(Option<UserId>) {
         async move {
