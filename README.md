@@ -39,7 +39,7 @@ cargo build --release
 cd target/release
 ```
 
-App was written and tested for version **rustc 1.79.0-nightly (c9f8f3438 2024-03-27)**, built on windows 11
+App was written and tested for version **rustc 1.79.0-nightly (c9f8f3438 2024-03-27)**, built on Windows 11
 
 ## Setup
 
