@@ -1,9 +1,10 @@
 mod http_response;
 
 use std::{collections::HashMap, str::FromStr};
+use std::time::Duration;
 
 use anyhow::{Result, Context};
-use std::time::Duration;
+
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, AsyncRead}, net::TcpStream, sync::mpsc::UnboundedReceiver};
 use tokio_util::sync::CancellationToken;
 

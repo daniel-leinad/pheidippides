@@ -2,9 +2,9 @@ use tokio::sync::{broadcast, mpsc::{self, UnboundedReceiver, UnboundedSender}};
 
 pub fn pipe_unbounded_channel<I, O, F>(mut channel: mpsc::UnboundedReceiver<I>, mut f: F) -> mpsc::UnboundedReceiver<O> 
 where
-I: 'static + Send, 
-O: 'static + Send, 
-F: 'static + FnMut(I) -> Option<O> + Send
+    I: 'static + Send, 
+    O: 'static + Send, 
+    F: 'static + FnMut(I) -> Option<O> + Send
 {
     let (sender, receiver) = mpsc::unbounded_channel();
     tokio::spawn(async move {
@@ -38,9 +38,9 @@ F: 'static + FnMut(I) -> Option<O> + Send
 
 pub fn pipe_broadcast<I, O, F>(mut in_channel: broadcast::Receiver<I>, mut f: F) -> mpsc::UnboundedReceiver<O> 
 where
-I: 'static + Send + Clone, 
-O: 'static + Send, 
-F: 'static + FnMut(I) -> Option<O> + Send
+    I: 'static + Send + Clone, 
+    O: 'static + Send, 
+    F: 'static + FnMut(I) -> Option<O> + Send
 {
     let (sender, receiver) = mpsc::unbounded_channel();
     tokio::spawn(async move {

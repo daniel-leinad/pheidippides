@@ -1,6 +1,7 @@
-use anyhow::Result;
 use std::collections::HashMap;
 use std::hash::Hash;
+
+use anyhow::Result;
 
 pub type Header = (CaseInsensitiveString, String);
 

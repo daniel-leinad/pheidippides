@@ -1,15 +1,18 @@
 use std::future::Future;
 
-use sqlx::postgres::PgConnectOptions;
-use sqlx::{query, Executor, PgPool, Row};
-use tokio::task::JoinError;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use chrono::DateTime;
 use anyhow::{Context, Result, bail};
 use thiserror::Error;
 
-use pheidippides::db::{AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId, MESSAGE_LOAD_BUF_SIZE};
+use tokio::task::JoinError;
+use tokio_util::sync::CancellationToken;
+use sqlx::postgres::PgConnectOptions;
+use sqlx::{query, Executor, PgPool, Row};
+
+use pheidippides::db::{
+    AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId, MESSAGE_LOAD_BUF_SIZE
+};
 
 const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 const DB_VERSION: i64 = 2;

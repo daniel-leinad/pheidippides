@@ -1,4 +1,3 @@
-use crate::db::{AuthenticationInfo, DbAccess, UserId};
 use anyhow::{bail, Context, Result};
 
 use argon2::{
@@ -8,6 +7,8 @@ use argon2::{
     },
     Argon2
 };
+
+use crate::db::{AuthenticationInfo, DbAccess, UserId};
 
 pub async fn verify_user<D: DbAccess>(user_id: &UserId, password: String, db_access: &D) -> Result<bool> {
     let auth_info = match db_access

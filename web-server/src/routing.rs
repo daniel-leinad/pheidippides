@@ -2,20 +2,24 @@ mod html;
 mod json;
 mod tools;
 
+use std::collections::HashMap;
+
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncRead;
-use super::sessions;
 
 use pheidippides_utils::async_utils;
-use pheidippides_utils::utils::{CaseInsensitiveString, log_internal_error, get_cookies_hashmap, header_set_cookie};
+use pheidippides_utils::utils::{
+    CaseInsensitiveString, log_internal_error, get_cookies_hashmap, header_set_cookie
+};
 use pheidippides_utils::serde::form_data as serde_form_data;
 
 use pheidippides::db;
 use pheidippides::app::App;
 use pheidippides::db::{DbAccess, MessageId};
+
+use crate::sessions;
 use crate::http::{self, EventSourceEvent, Request, Response};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct RequestHandler<D: db::DbAccess> {

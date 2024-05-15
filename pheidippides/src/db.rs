@@ -2,12 +2,11 @@ use std::cmp::PartialEq;
 use std::hash::Hash;
 use std::future::Future;
 use std::str::FromStr;
+
 use chrono::DateTime;
 use thiserror::Error;
-
-use serde::Serialize;
-
 use uuid::Uuid;
+use serde::Serialize;
 
 pub type MessageId = Uuid;
 pub type UserId = Uuid;

@@ -1,7 +1,9 @@
-use anyhow::{bail, Result};
-use once_cell::sync::Lazy;
 use std::sync::RwLock;
 use std::collections::HashMap;
+
+use anyhow::{bail, Result};
+use once_cell::sync::Lazy;
+
 use pheidippides::db;
 
 pub type SessionId = String;

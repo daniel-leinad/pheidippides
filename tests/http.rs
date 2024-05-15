@@ -1,5 +1,6 @@
-use web_server::http;
 use std::collections::HashMap;
+
+use web_server::http;
 
 #[tokio::test]
 async fn cannot_make_request_of_gibberish() {
