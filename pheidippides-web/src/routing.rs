@@ -8,6 +8,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncRead;
 
+use web_server::{self, EventSourceEvent, Request, Response};
+
 use pheidippides_utils::async_utils;
 use pheidippides_utils::utils::{
     CaseInsensitiveString, log_internal_error, get_cookies_hashmap, header_set_cookie
@@ -19,7 +21,6 @@ use pheidippides::app::App;
 use pheidippides::db::{DbAccess, MessageId};
 
 use crate::sessions;
-use crate::http::{self, EventSourceEvent, Request, Response};
 
 #[derive(Clone)]
 pub struct RequestHandler<D: db::DbAccess> {
@@ -51,7 +52,7 @@ impl std::fmt::Display for RequestHandlerError {
 
 impl std::error::Error for RequestHandlerError {}
 
-impl<D: db::DbAccess, T: AsyncRead + Unpin + Sync + Send> http::RequestHandler<Request<T>> for RequestHandler<D> {
+impl<D: db::DbAccess, T: AsyncRead + Unpin + Sync + Send> web_server::RequestHandler<Request<T>> for RequestHandler<D> {
     type Error = RequestHandlerError;
 
     fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
@@ -86,7 +87,7 @@ pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app:
         path_segments.next(),
     );
 
-    use http::Method::*;
+    use web_server::Method::*;
     let response = match query {
         (Get, None, ..) => main_page(request),
         (Get, Some("login"), None, ..) => authorization_page().await,

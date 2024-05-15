@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use web_server::http;
+use web_server;
 
 #[tokio::test]
 async fn cannot_make_request_of_gibberish() {
     let reader = tokio_test::io::Builder::new()
         .read(b"sdksdjlkdj")
         .build();
-    let request_res = http::Request::try_from_stream(reader).await;
+    let request_res = web_server::Request::try_from_stream(reader).await;
     assert!(request_res.is_err())
 }
 
@@ -19,9 +19,9 @@ async fn makes_request_with_headers() {
         .read(b"Header-2: 1\r\n")
         .read(b"\r\n")
         .build();
-    let request = http::Request::try_from_stream(reader).await.unwrap();
+    let request = web_server::Request::try_from_stream(reader).await.unwrap();
     assert_eq!(request.url(), "/resource");
-    assert_eq!(request.method(), http::Method::Get);
+    assert_eq!(request.method(), web_server::Method::Get);
     assert_eq!(*request.headers(), HashMap::from([
         ("Header-1".into(), String::from("0")),
         ("Header-2".into(), String::from("1")),
@@ -36,7 +36,7 @@ async fn cant_read_content_without_content_length() {
         .read(b"Header-2: 1\r\n")
         .read(b"\r\n")
         .build();
-    let mut request = http::Request::try_from_stream(reader).await.unwrap();
+    let mut request = web_server::Request::try_from_stream(reader).await.unwrap();
     assert!(request.content().await.is_err());
 }
 
@@ -48,6 +48,6 @@ async fn reads_content() {
         .read(b"\r\n")
         .read(b"1223334444")
         .build();
-    let mut request = http::Request::try_from_stream(reader).await.unwrap();
+    let mut request = web_server::Request::try_from_stream(reader).await.unwrap();
     assert_eq!(request.content().await.unwrap(), "1223334444");
 }

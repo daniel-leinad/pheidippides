@@ -6,6 +6,7 @@ publish = false
 
 [dev-dependencies]
 pheidippides = { path = "../pheidippides" }
+pheidippides-web = { path = "../pheidippides-web" }
 web-server = { path = "../web-server" }
 mock-db = { path = "../mock-db" }
 tokio = "1.37.0"

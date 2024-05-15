@@ -1,5 +1,6 @@
-use web_server::{http, routing};
+use web_server;
 use pheidippides::app;
+use pheidippides_web::routing;
 use mock_db;
 
 #[tokio::test]
@@ -8,10 +9,10 @@ async fn returns_bad_request_for_wrong_url() {
         .read(b"GET /random_url/aaa/bbbbb HTTP/1.1\r\n")
         .read(b"\r\n")
         .build();
-    let mut request = http::Request::try_from_stream(reader).await.unwrap();
+    let mut request = web_server::Request::try_from_stream(reader).await.unwrap();
     let db_access = mock_db::Db::new().await;
     let app = app::App::new(db_access);
     let response = routing::handle_request(&mut request, app).await.unwrap();
-    let is_bad_request = if let http::Response::BadRequest = response {true} else {false};
+    let is_bad_request = if let web_server::Response::BadRequest = response {true} else {false};
     assert!(is_bad_request);
 }

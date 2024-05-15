@@ -1078,6 +1078,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pheidippides-web"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "once_cell",
+ "pheidippides",
+ "pheidippides-utils",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+ "web-server",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1284,6 +1300,7 @@ dependencies = [
  "clap",
  "mock-db",
  "pheidippides",
+ "pheidippides-web",
  "postgres-db",
  "tokio",
  "tokio-util",
@@ -1657,6 +1674,7 @@ version = "0.1.0"
 dependencies = [
  "mock-db",
  "pheidippides",
+ "pheidippides-web",
  "tokio",
  "tokio-test",
  "web-server",
@@ -1967,15 +1985,9 @@ name = "web-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "askama",
- "once_cell",
- "pheidippides",
  "pheidippides-utils",
- "serde",
- "serde_json",
  "tokio",
  "tokio-util",
- "uuid",
 ]
 
 [[package]]

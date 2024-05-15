@@ -3,10 +3,14 @@ resolver = "2"
 members = [
     "pheidippides",
     "pheidippides-utils",
+    "pheidippides-web",
     "web-server",
     "postgres-db",
     "mock-db",
+
+    "pheidippides-db-tests",
     "tests",
+    
     "bin/server",
-    "bin/migrate", "pheidippides-db-tests",
+    "bin/migrate",
 ]
