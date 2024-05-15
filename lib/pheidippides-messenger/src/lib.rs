@@ -6,6 +6,7 @@ use crate::data_access::DataAccess;
 pub mod messenger;
 pub mod data_access;
 pub mod authorization;
+mod subscriptions_handler;
 
 pub type MessageId = Uuid;
 pub type UserId = Uuid;

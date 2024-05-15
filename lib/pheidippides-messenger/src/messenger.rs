@@ -1,22 +1,15 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
-
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use tokio::sync::mpsc;
-use tokio::sync::broadcast::Sender;
-
-use pheidippides_utils::{async_utils, utils::log_internal_error};
+use pheidippides_utils::utils::log_internal_error;
 
 use crate::data_access::DataAccess;
-use crate::{authorization, User, Message, MessageId, UserId};
-
-const SUBSCRIPTIONS_CLEANUP_INTERVAL: Duration = Duration::from_secs(5);
+use crate::{authorization, Message, MessageId, User, UserId};
+use crate::subscriptions_handler::SubscriptionsHandler;
 
 #[derive(Clone)]
 pub struct Messenger<D: DataAccess> {
-    db_access: D,
-    new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>,
+    data_access: D,
+    subscriptions_handler: SubscriptionsHandler<D>,
 }
 
 pub enum UserCreationError {
@@ -24,39 +17,21 @@ pub enum UserCreationError {
 }
 
 impl<D: DataAccess> Messenger<D> {
-    pub fn new(db_access: D) -> Self {
-        let new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>  = Arc::new(RwLock::new(HashMap::new()));
-
-        Self::spawn_subscription_cleanup_job(new_messages_subscriptions.clone());
+    pub fn new(data_access: D) -> Self {
+        let subscriptions_handler = SubscriptionsHandler::new(data_access.clone());
         
-        Messenger { db_access, new_messages_subscriptions }
-    }
-
-    fn spawn_subscription_cleanup_job(new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>) {
-        // Periodically removes unused subscriptions
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(SUBSCRIPTIONS_CLEANUP_INTERVAL).await;
-                match new_messages_subscriptions.write() {
-                    Ok(mut write_lock) => {
-                        write_lock.retain(|_, sender| sender.receiver_count() > 0);
-                        write_lock.shrink_to_fit();
-                    },
-                    Err(e) => log_internal_error(e),
-                }
-            }
-        });
+        Messenger { data_access, subscriptions_handler }
     }
 
     pub async fn create_user(&self, login: &str, password: String) -> Result<Option<UserId>> {
-        let user_id = match self.db_access
+        let user_id = match self.data_access
             .create_user(login).await
             .with_context(|| format!("Couldn't create user {}", login))? {
             Some(user_id) => user_id,
             None => return Ok(None),
         };
 
-        authorization::create_user(&user_id, password, &self.db_access).await.with_context(
+        authorization::create_user(&user_id, password, &self.data_access).await.with_context(
             || format!("Authorization error: couldn't create user {}", login))?;
         
         Ok(Some(user_id))
@@ -69,7 +44,7 @@ impl<D: DataAccess> Messenger<D> {
         };
 
         let res = authorization
-            ::verify_user(&user_id, password, &self.db_access).await
+            ::verify_user(&user_id, password, &self.data_access).await
             .with_context(|| format!("Authorization error: couldn't verify user {}", &user_id))?;
 
         if res {
@@ -81,7 +56,7 @@ impl<D: DataAccess> Messenger<D> {
 
     pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<User>> {
         
-        let chats = self.db_access
+        let chats = self.data_access
                 .find_users_chats(&user_id).await
                 .with_context(|| format!("Couldn't fetch chats for user {user_id}"))?;
         
@@ -89,7 +64,7 @@ impl<D: DataAccess> Messenger<D> {
     }
 
     pub async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>> {
-        let user = self.db_access
+        let user = self.data_access
             .fetch_user(user_id).await
             .with_context(|| format!("Couldn't fetch user with id {user_id}"))?;
         Ok(user)
@@ -109,95 +84,35 @@ impl<D: DataAccess> Messenger<D> {
             timestamp: chrono::Utc::now(),
         };
 
-        self.db_access
+        self.data_access
             .create_message(&message).await
             .with_context(|| format!("Couldn't create message from {from} to {to}"))?;
 
-        if let Err(e) = self.handle_message_subscription(&message) {
+        if let Err(e) = self.subscriptions_handler.handle_new_message(&message) {
             log_internal_error(e);
         };
 
         Ok(message.id)
     }
 
-    fn handle_message_subscription(&self, message: &Message) -> Result<()> {
-        let subscriptions_read = match self.new_messages_subscriptions.read() {
-            Ok(read_lock) => read_lock,
-            Err(e) => bail!("Could not lock new_messages_subscriptions for read: {e}"),
-        };
-
-        if let Some(sender) = subscriptions_read.get(&message.from) {
-            Self::send_event_to_subscribers(sender, message)
-                    .with_context(|| format!("Couldn't send subscription events for {}", &message.from))?;
-        };
-
-        if message.from != message.to {
-            if let Some(sender) = subscriptions_read.get(&message.to) {
-                Self::send_event_to_subscribers(sender, message)
-                    .with_context(|| format!("Couldn't send subscription events for {}", &message.to))?;
-            };
-        };
-
-        Ok(())
-    }
-
-    fn send_event_to_subscribers<T: Clone>(sender: &Sender<T>, event: &T) -> Result<()> {
-        match sender.send(event.clone()) {
-            Ok(_) => Ok(()),
-            Err(e) => bail!("{e}")
-        }
-    }
-
     pub async fn find_users_by_substring(&self, substring: &str) -> Result<Vec<User>> {
-        let users = self.db_access
+        let users = self.data_access
             .find_users_by_substring(substring).await
             .with_context(|| format!("Could't process users search request by substring: {substring}"))?;
         Ok(users)
     }
 
     pub async fn fetch_last_messages(&self, current_user: &UserId, other_user: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>> {
-        self.db_access.fetch_last_messages_in_chat(current_user, other_user, starting_point).await
+        self.data_access.fetch_last_messages_in_chat(current_user, other_user, starting_point).await
             .with_context(|| format!("Could not fetch last messages.\
                 current_user: {current_user}, other_user: {other_user}, starting_point: {starting_point:?}"))
     }
 
-    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> Result<tokio::sync::mpsc::UnboundedReceiver<Message>> {
-        let subscription = {
-            // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-            let mut subscriptions_lock = match self.new_messages_subscriptions.write() {
-                Ok(res) => res,
-                Err(e) => bail!("Could not lock new_messages_subscriptions for write: {e}"),
-            };
-
-            subscriptions_lock.entry(user_id).or_insert(tokio::sync::broadcast::channel(100).0).subscribe()
-        };
-
-        match starting_point {
-            None => {
-                // no extra channel needed, simply convert broadcast to an unbounded channel
-                Ok(async_utils::pipe_broadcast(subscription, |v| Some(v)))
-            },
-            Some(starting_point) => {
-                let previous_messages = self.db_access.fetch_users_messages_since(&user_id, &starting_point).await?;
-                let (sender, receiver) = mpsc::unbounded_channel();
-
-                let mut sent_messages = HashSet::new();
-                for message in previous_messages {
-                    sent_messages.insert(message.id);
-                    sender.send(message)?; // Receiver can't be dropped at this point, if .send() returns an error, propagate it back for debugging
-                };
-
-                let subscription_filtered = async_utils::pipe_broadcast(subscription, move |message| {
-                    if sent_messages.contains(&message.id) {None} else {Some(message)}
-                });
-
-                async_utils::redirect_unbounded_channel(subscription_filtered, sender);
-                Ok(receiver)
-            },
-        }
+    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> Result<mpsc::UnboundedReceiver<Message>> {
+        self.subscriptions_handler.subscribe_new_messages(user_id, starting_point).await
     }
 
     async fn find_user_by_username(&self, username: &str) -> Result<Option<UserId>> {
-        self.db_access.find_user_by_username(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
+        self.data_access.find_user_by_username(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
     }
 }
