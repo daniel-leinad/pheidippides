@@ -8,7 +8,7 @@ use tokio::sync::broadcast::Sender;
 
 use pheidippides_utils::{utils::log_internal_error, async_utils};
 
-use crate::db::{ChatInfo, DbAccess, MessageId, UserId, Message};
+use crate::db::{Chat, DbAccess, MessageId, UserId, Message};
 use crate::authorization;
 
 // TODO better name
@@ -80,7 +80,7 @@ impl<D: DbAccess> App<D> {
         }
     }
 
-    pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>> {
+    pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<Chat>> {
         
         let chats = self.db_access
                 .chats(&user_id).await
@@ -89,8 +89,8 @@ impl<D: DbAccess> App<D> {
         Ok(chats)
     }
 
-    pub async fn fetch_chat_info(&self, user_id: &UserId) -> Result<Option<ChatInfo>> {
-        let chat_info = self.db_access.chat_info(user_id).await?;
+    pub async fn fetch_chat_info(&self, user_id: &UserId) -> Result<Option<Chat>> {
+        let chat_info = self.db_access.chat(user_id).await?;
         Ok(chat_info)
     }
 
@@ -146,7 +146,7 @@ impl<D: DbAccess> App<D> {
         }
     }
 
-    pub async fn find_chats(&self, query: &str) -> Result<Vec<ChatInfo>> {
+    pub async fn find_chats(&self, query: &str) -> Result<Vec<Chat>> {
         let chats = self.db_access
             .find_chats(query).await
             .with_context(|| format!("Could't process chats search request with query: {query}"))?;

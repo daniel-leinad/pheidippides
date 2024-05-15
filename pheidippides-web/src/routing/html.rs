@@ -7,7 +7,7 @@ use web_server::{Request, Response};
 
 use pheidippides_utils::serde::form_data as serde_form_data;
 
-use pheidippides::db::ChatInfo;
+use pheidippides::db::Chat;
 use pheidippides::db::{self, UserId};
 use pheidippides::app::App;
 
@@ -18,13 +18,13 @@ use crate::routing::get_authorization;
 struct ChatPage<'a> {
     username: &'a str,
     user_id: &'a UserId,
-    chats: Vec<ChatInfo>,
+    chats: Vec<Chat>,
 }
 
 #[derive(Template)]
 #[template(path = "elements/chats.html")]
 struct ChatHtmlElements {
-    chats: Vec<ChatInfo>,
+    chats: Vec<Chat>,
 }
 
 #[derive(Template)]

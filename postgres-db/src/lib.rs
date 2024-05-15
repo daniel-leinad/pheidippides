@@ -11,7 +11,7 @@ use sqlx::postgres::PgConnectOptions;
 use sqlx::{query, Executor, PgPool, Row};
 
 use pheidippides::db::{
-    AuthenticationInfo, ChatInfo, DbAccess, Message, UserId, MessageId, MESSAGE_LOAD_BUF_SIZE
+    AuthenticationInfo, Chat, DbAccess, Message, UserId, MessageId, MESSAGE_LOAD_BUF_SIZE
 };
 
 const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
@@ -101,7 +101,7 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Self::Error> {
+    async fn chats(&self, user_id: &UserId) -> Result<Vec<Chat>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let temp_table_chat_ids = temp_table_name("chat_ids");
@@ -146,7 +146,7 @@ impl DbAccess for Db {
             order by last_messages.timestamp desc
             "#))).await?
             .iter()
-            .map(|row| {ChatInfo{id: row.get(0), username: row.get(1)}})
+            .map(|row| {Chat{id: row.get(0), username: row.get(1)}})
             .collect();
 
         conn.execute(query(&format!("drop table {temp_table_chat_ids_grouped};"))).await?;
@@ -295,7 +295,7 @@ impl DbAccess for Db {
         Ok(res.map(|row| row.get(0))) 
     }
     
-    async fn find_chats(&self, search_query: &str) -> Result<Vec<ChatInfo>, Error> {
+    async fn find_chats(&self, search_query: &str) -> Result<Vec<Chat>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_all(query(r#"
                 select user_id, username from users where lower(username) like $1
@@ -304,7 +304,7 @@ impl DbAccess for Db {
             .map(|row| {
                 let id = row.get(0);
                 let username = row.get(1);
-                ChatInfo{ username, id }
+                Chat{ username, id }
             })
             .collect();
         Ok(res)
@@ -343,11 +343,11 @@ impl DbAccess for Db {
         Ok(res)
     }
 
-    async fn chat_info(&self, user_id: &UserId) -> Result<Option<ChatInfo>, Error> {
+    async fn chat(&self, user_id: &UserId) -> Result<Option<Chat>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn
             .fetch_optional(query("select username from users where users.user_id = $1").bind(user_id)).await?
-            .map(|row| {ChatInfo{ username: row.get(0), id: *user_id }});
+            .map(|row| {Chat{ username: row.get(0), id: *user_id }});
         Ok(res)
     }
 }

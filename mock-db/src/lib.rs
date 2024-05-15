@@ -125,7 +125,7 @@ impl DbAccess for Db {
         Ok(self.users.lock()?.iter().map(|value| value.clone()).collect())
     }
 
-    async fn chats(&self, user_id: &UserId) -> Result<Vec<ChatInfo>, Error> {
+    async fn chats(&self, user_id: &UserId) -> Result<Vec<Chat>, Error> {
         let users = self.users().await?;
         let users = {
             let mut res = HashMap::new();
@@ -136,9 +136,9 @@ impl DbAccess for Db {
         };
         let res = self.messages.lock()?.iter().rev().filter_map(|msg_record| {
             if &msg_record.from == user_id {
-                Some(ChatInfo::new::<Db>(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
+                Some(Chat::new::<Db>(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else if &msg_record.to == user_id {
-                Some(ChatInfo::new::<Db>(msg_record.from.clone(), users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
+                Some(Chat::new::<Db>(msg_record.from.clone(), users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else {
                 None
             }

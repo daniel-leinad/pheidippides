@@ -26,7 +26,7 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
 
     // fn users(&self) -> impl Future<Output = Result<Vec<(UserId, String)>, Self::Error>> + Send;
     fn users(&self) -> async_result!(Vec<(UserId, String)>);
-    fn chats(&self, user_id: &UserId) -> async_result!(Vec<ChatInfo>);
+    fn chats(&self, user_id: &UserId) -> async_result!(Vec<Chat>);
     fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>)-> async_result!(Vec<Message>);
     fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> async_result!(Vec<Message>);
     fn create_message(&self, message: &Message) -> async_result!(());
@@ -56,12 +56,12 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
         }
     }
 
-    fn find_chats(&self, search_query: &str) -> async_result!(Vec<ChatInfo>) {
+    fn find_chats(&self, search_query: &str) -> async_result!(Vec<Chat>) {
         async {
             let search_query = search_query.to_lowercase();
             let res = self.users().await?.into_iter().filter_map(|(user_id, username)| {
                 if username.to_lowercase().contains(&search_query) {
-                    Some(ChatInfo::new::<Self>(user_id, username))
+                    Some(Chat::new::<Self>(user_id, username))
                 } else {
                     None
                 }
@@ -70,14 +70,14 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
         }
     }
 
-    fn chat_info(&self, user_id: &UserId) -> async_result!(Option<ChatInfo>) {
+    fn chat(&self, user_id: &UserId) -> async_result!(Option<Chat>) {
         async move {
             let chat_info = self.users().await?
                 .into_iter().filter_map(|(id, username)| {
                     if &id == user_id {
                         let id = id.to_owned();
                         let username = username.to_owned();
-                        Some(ChatInfo { username, id })
+                        Some(Chat { username, id })
                     } else {
                         None
                     }
@@ -89,15 +89,15 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
 }
 
 #[derive(PartialEq, Hash)]
-pub struct ChatInfo {
+pub struct Chat {
     pub username: String,
     pub id: UserId,
 }
 
-impl ChatInfo {
+impl Chat {
     pub fn new<T: DbAccess>(id: UserId, username: String) -> Self
     {
-        ChatInfo {username, id}
+        Chat {username, id}
     }
 }
 
