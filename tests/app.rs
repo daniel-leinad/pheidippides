@@ -1,7 +1,7 @@
 #![feature(assert_matches)]
 use std::assert_matches::assert_matches;
 
-use pheidippides::{app, db};
+use pheidippides::{app, Message};
 use mock_db;
 
 #[tokio::test]
@@ -20,13 +20,13 @@ async fn subscribes_to_new_messages_without_starting_point() {
     app.send_message("Message 6".into(), user_id_3, user_id_1).await.unwrap();
 
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_2 && to == user_id_1 && &message == "Message 3");
+        Message{ from, to, message, ..} if from == user_id_2 && to == user_id_1 && &message == "Message 3");
 
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 4");
+        Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 4");
 
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
+        Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
 }
 
 #[tokio::test]
@@ -46,16 +46,16 @@ async fn subscribtions_to_new_messages_without_starting_point_dont_conflict() {
     app.send_message("Message 6".into(), user_id_3, user_id_1).await.unwrap();
 
     assert_matches!(subscription1.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_2 && to == user_id_1 && &message == "Message 3");
+        Message{ from, to, message, ..} if from == user_id_2 && to == user_id_1 && &message == "Message 3");
 
     assert_matches!(subscription1.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 4");
+        Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 4");
 
     assert_matches!(subscription1.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
+        Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
 
     assert_matches!(subscription2.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
+        Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
 }
 
 #[tokio::test]
@@ -74,9 +74,9 @@ async fn subscribes_to_new_messages_with_starting_point() {
     let mut subscription = app.subscribe_new_messages(user_id_1, Some(starting_point)).await.unwrap();
 
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 4");
+        Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 4");
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
+        Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 6");
     
     app.send_message("Message 7".into(), user_id_2, user_id_1).await.unwrap();
     app.send_message("Message 8".into(), user_id_1, user_id_2).await.unwrap();
@@ -84,11 +84,11 @@ async fn subscribes_to_new_messages_with_starting_point() {
     app.send_message("Message 10".into(), user_id_3, user_id_1).await.unwrap();
 
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_2 && to == user_id_1 && &message == "Message 7");
+        Message{ from, to, message, ..} if from == user_id_2 && to == user_id_1 && &message == "Message 7");
 
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 8");
+        Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 8");
 
     assert_matches!(subscription.recv().await.unwrap(), 
-        db::Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 10");
+        Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 10");
 }

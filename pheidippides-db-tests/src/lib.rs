@@ -1,7 +1,8 @@
 use std::time::Duration;
 use uuid::uuid;
 
-use pheidippides::db::{DbAccess, Message};
+use pheidippides::db::DbAccess;
+use pheidippides::Message;
 
 #[macro_export]
 macro_rules! db_access_tests {

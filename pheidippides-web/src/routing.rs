@@ -12,13 +12,13 @@ use web_server::{self, EventSourceEvent, Request, Response};
 
 use pheidippides_utils::async_utils;
 use pheidippides_utils::utils::{
-    CaseInsensitiveString, log_internal_error, get_cookies_hashmap, header_set_cookie
+    CaseInsensitiveString, get_cookies_hashmap, header_set_cookie, log_internal_error
 };
 use pheidippides_utils::serde::form_data as serde_form_data;
 
-use pheidippides::db;
+use pheidippides::{db, MessageId, UserId};
 use pheidippides::app::App;
-use pheidippides::db::{DbAccess, MessageId};
+use pheidippides::db::DbAccess;
 
 use crate::sessions;
 
@@ -253,7 +253,7 @@ struct SendMessageParams {
 
 async fn send_message<D: db::DbAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<D>, receiver: &str) -> Result<Response> {
 
-    let receiver: db::UserId = match receiver.parse() {
+    let receiver: UserId = match receiver.parse() {
         Ok(res) => res,
         Err(_) => return Ok(Response::BadRequest),
     };
@@ -345,7 +345,7 @@ fn unauthorized_redirect() -> Response {
 }
 
 // TODO return 'static reference for optimisation?
-fn get_authorization(headers: &HashMap<CaseInsensitiveString, String>) -> Result<Option<db::UserId>> {
+fn get_authorization(headers: &HashMap<CaseInsensitiveString, String>) -> Result<Option<UserId>> {
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
         // TODO handle error

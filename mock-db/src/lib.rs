@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
-use pheidippides::authorization;
+use pheidippides::{authorization, Chat, Message, MessageId, UserId};
 use pheidippides::db::*;
 
 struct MessageRecord {

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "pheidippides",
+    "pheidippides-messenger",
     "pheidippides-utils",
     "pheidippides-web",
     "web-server",

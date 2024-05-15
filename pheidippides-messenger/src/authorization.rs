@@ -1,14 +1,15 @@
 use anyhow::{bail, Context, Result};
 
 use argon2::{
+    Argon2,
     password_hash::{
-        rand_core::OsRng,
-        PasswordHasher, PasswordVerifier, SaltString
-    },
-    Argon2
+        PasswordHasher,
+        PasswordVerifier, rand_core::OsRng, SaltString
+    }
 };
 
-use crate::db::{AuthenticationInfo, DbAccess, UserId};
+use crate::db::{AuthenticationInfo, DbAccess};
+use crate::UserId;
 
 pub async fn verify_user<D: DbAccess>(user_id: &UserId, password: String, db_access: &D) -> Result<bool> {
     let auth_info = match db_access

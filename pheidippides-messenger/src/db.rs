@@ -1,15 +1,9 @@
-use std::cmp::PartialEq;
-use std::hash::Hash;
 use std::future::Future;
 use std::str::FromStr;
 
-use chrono::DateTime;
 use thiserror::Error;
-use uuid::Uuid;
-use serde::Serialize;
 
-pub type MessageId = Uuid;
-pub type UserId = Uuid;
+use crate::{Chat, Message, MessageId, UserId};
 
 pub const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 
@@ -86,32 +80,6 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
             Ok(chat_info)
         }
     }
-}
-
-#[derive(PartialEq, Hash)]
-pub struct Chat {
-    pub username: String,
-    pub id: UserId,
-}
-
-impl Chat {
-    pub fn new<T: DbAccess>(id: UserId, username: String) -> Self
-    {
-        Chat {username, id}
-    }
-}
-
-#[derive(Serialize, Clone, PartialEq, Debug)]
-pub struct Message {
-    #[serde(serialize_with = "pheidippides_utils::serde::serialize_uuid")]
-    pub id: MessageId,
-    #[serde(serialize_with = "pheidippides_utils::serde::serialize_uuid")]
-    pub from: UserId,
-    #[serde(serialize_with = "pheidippides_utils::serde::serialize_uuid")]
-    pub to: UserId,
-    pub message: String,
-    #[serde(serialize_with = "pheidippides_utils::serde::serialize_datetime")]
-    pub timestamp: DateTime<chrono::Utc>,
 }
 
 pub struct AuthenticationInfo {

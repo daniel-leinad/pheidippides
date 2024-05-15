@@ -2,14 +2,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use tokio::sync::mpsc;
 use tokio::sync::broadcast::Sender;
 
-use pheidippides_utils::{utils::log_internal_error, async_utils};
+use pheidippides_utils::{async_utils, utils::log_internal_error};
 
-use crate::db::{Chat, DbAccess, MessageId, UserId, Message};
-use crate::authorization;
+use crate::db::DbAccess;
+use crate::{authorization, Chat, Message, MessageId, UserId};
 
 // TODO better name
 const SUBSCRIPTION_GARBAGE_COLLECTION_INTERVAL: Duration = Duration::from_secs(5);

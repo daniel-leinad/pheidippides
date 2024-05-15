@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use once_cell::sync::Lazy;
 
-use pheidippides::db;
+use pheidippides::UserId;
 
 pub type SessionId = String;
 
@@ -12,7 +12,7 @@ pub const SESSION_ID_COOKIE: &str = "_pheidippides_sid";
 
 #[derive(Clone)]
 pub struct SessionInfo {
-    pub user_id: db::UserId,
+    pub user_id: UserId,
 }
 
 pub static SESSION_INFO: Lazy<RwLock<HashMap<SessionId, SessionInfo>>> = Lazy::new(|| RwLock::new(HashMap::new()));
