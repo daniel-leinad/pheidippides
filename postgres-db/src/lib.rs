@@ -101,35 +101,90 @@ impl DataAccess for Db {
 
         Ok(res)
     }
-    
+
+    async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn
+            .fetch_optional(query("select username from users where users.user_id = $1").bind(user_id)).await?
+            .map(|row| { User { username: row.get(0), id: *user_id }});
+        Ok(res)
+    }
+
+    async fn find_user_by_username(&self, requested_username: &str) -> Result<Option<UserId>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn.fetch_optional(query(r#"
+            select user_id from users where lower(username) = $1
+        "#).bind(requested_username.to_lowercase())).await?;
+        Ok(res.map(|row| row.get(0)))
+    }
+
+    async fn find_users_by_substring(&self, search_query: &str) -> Result<Vec<User>, Error> {
+        let mut conn = self.pool.acquire().await?;
+        let res = conn.fetch_all(query(r#"
+                select user_id, username from users where lower(username) like $1
+            "#).bind(format!("%{}%", search_query.to_lowercase()))).await?
+            .into_iter()
+            .map(|row| {
+                let id = row.get(0);
+                let username = row.get(1);
+                User { username, id }
+            })
+            .collect();
+        Ok(res)
+    }
+
+    async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
+        let user_id = Uuid::new_v4();
+        let mut transaction = self.pool.begin().await?;
+
+        transaction.execute("lock table users in exclusive mode;").await?;
+
+        let username_exists: bool = transaction
+            .fetch_one(query(r#"
+                select exists(select 1 from users where lower(username) = $1)
+            "#).bind(username.to_lowercase())).await?.get(0);
+
+        if username_exists {
+            return Ok(None);
+        };
+
+        transaction.execute(query(r#"
+                insert into users(user_id, username) values ($1, $2);
+            "#).bind(user_id).bind(username)).await?;
+
+        transaction.commit().await?;
+
+        Ok(Some(user_id))
+    }
+
     async fn find_users_chats(&self, user_id: &UserId) -> Result<Vec<User>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let temp_table_chat_ids = temp_table_name("chat_ids");
         conn.execute(query(&format!(r#"
-            create temp table {temp_table_chat_ids} as 
+            create temp table {temp_table_chat_ids} as
             select
                 sender as user_id,
                 MAX(timestamp) as timestamp
-            from messages 
+            from messages
             where receiver = $1
-            group by user_id 
-            
-            union 
-            
-            select 
+            group by user_id
+
+            union
+
+            select
                 receiver as user_id,
                 MAX(timestamp) as timestamp
             from messages
             where sender = $1
             group by user_id
             "#)).bind(user_id)).await?;
-        
+
         let temp_table_chat_ids_grouped = temp_table_name("chat_ids_grouped");
         conn.execute(query(&format!(r#"
             create temp table {temp_table_chat_ids_grouped} as
             select
-                user_id as user_id, 
+                user_id as user_id,
                 MAX(timestamp) as timestamp
             from {temp_table_chat_ids}
             group by user_id
@@ -154,7 +209,7 @@ impl DataAccess for Db {
 
         Ok(res)
     }
-    
+
     async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let mut query_builder = sqlx::QueryBuilder::new("");
@@ -166,7 +221,7 @@ impl DataAccess for Db {
         .push(") or (receiver = ").push_bind(user_id_2)
         .push(" and sender = ").push_bind(user_id_1)
         .push("))");
-        
+
         if let Some(starting_point) = starting_point {
             let msg_timestamp = conn
                 .fetch_optional(query("select timestamp from messages where id = $1").bind(starting_point)).await?;
@@ -197,112 +252,7 @@ impl DataAccess for Db {
             .collect();
         Ok(res)
     }
-    
-    async fn create_message(&self, message: &Message) -> Result<(), Self::Error> {
-        let mut conn = self.pool.acquire().await?;
-        conn.execute(query(r#"
-                insert into messages(id, sender, receiver, message, timestamp)
-                values ($1, $2, $3, $4, $5)
-            "#)
-            .bind(message.id)
-            .bind(message.from)
-            .bind(message.to)
-            .bind(&message.message)
-            .bind(message.timestamp))
-            .await?;
-        Ok(())
-    }
-    
-    async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
-        let res = self.pool.acquire().await?
-            .fetch_optional(query(r#"
-            select phc_string from auth where user_id = $1
-            "#).bind(user_id)).await?;
-        
-        match res {
-            Some(row) => {
-                let phc_string: &str = row.get(0);
-                let auth_info = phc_string.parse()?;
-                Ok(Some(auth_info))
-            },
-            None => Ok(None),
-        }
-    }
-    
-    async fn update_authentication(&self, user_id: &UserId, auth_info: pheidippides::db::AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-        transaction.execute(query("lock table auth in exclusive mode")).await?;
-        let old_auth = transaction.fetch_optional(query(
-                "select phc_string from auth where user_id = $1"
-            ).bind(user_id)).await?;
 
-        match old_auth {
-            Some(row) => {
-                let old_phc_string: &str = row.get(0);
-                let old_auth: AuthenticationInfo = old_phc_string.parse()?;
-                transaction.execute(query(
-                    "update auth set phc_string = $1 where user_id = $2"
-                ).bind(auth_info.phc_string().to_string()).bind(user_id)).await?;
-                transaction.commit().await?;
-                Ok(Some(old_auth))
-            },
-            None => {
-                transaction.execute(query(r#"
-                    insert into auth (user_id, phc_string) values ($1, $2)
-                    "#).bind(user_id).bind(auth_info.phc_string().to_string())).await?;
-                transaction.commit().await?;
-                Ok(None)
-            },
-        }
-    }
-    
-    async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
-        let user_id = Uuid::new_v4();
-        let mut transaction = self.pool.begin().await?;
-
-        transaction.execute("lock table users in exclusive mode;").await?;
-
-        let username_exists: bool = transaction
-            .fetch_one(query(r#"
-                select exists(select 1 from users where lower(username) = $1)
-            "#).bind(username.to_lowercase())).await?.get(0);
-        
-        if username_exists {
-            return Ok(None);
-        };
-        
-        transaction.execute(query(r#"
-                insert into users(user_id, username) values ($1, $2);
-            "#).bind(user_id).bind(username)).await?;
-        
-        transaction.commit().await?;
-
-        Ok(Some(user_id))
-    }
-
-    async fn find_user_by_username(&self, requested_username: &str) -> Result<Option<UserId>, Error> {
-        let mut conn = self.pool.acquire().await?;
-        let res = conn.fetch_optional(query(r#"
-            select user_id from users where lower(username) = $1
-        "#).bind(requested_username.to_lowercase())).await?;
-        Ok(res.map(|row| row.get(0))) 
-    }
-    
-    async fn find_users_by_substring(&self, search_query: &str) -> Result<Vec<User>, Error> {
-        let mut conn = self.pool.acquire().await?;
-        let res = conn.fetch_all(query(r#"
-                select user_id, username from users where lower(username) like $1
-            "#).bind(format!("%{}%", search_query.to_lowercase()))).await?
-            .into_iter()
-            .map(|row| {
-                let id = row.get(0);
-                let username = row.get(1);
-                User { username, id }
-            })
-            .collect();
-        Ok(res)
-    }
-    
     async fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Error> {
         let mut conn = self.pool.acquire().await?;
 
@@ -310,7 +260,7 @@ impl DataAccess for Db {
                 .fetch_optional(
                     query("select timestamp from messages where id = $1").bind(starting_point)
                 ).await?.map(|row| row.get(0));
-        
+
         let msg_timestamp = match msg_timestamp {
             Some(msg_timestamp) => msg_timestamp,
             None => return Ok(vec![]),
@@ -336,12 +286,62 @@ impl DataAccess for Db {
         Ok(res)
     }
 
-    async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>, Error> {
+    async fn create_message(&self, message: &Message) -> Result<(), Self::Error> {
         let mut conn = self.pool.acquire().await?;
-        let res = conn
-            .fetch_optional(query("select username from users where users.user_id = $1").bind(user_id)).await?
-            .map(|row| { User { username: row.get(0), id: *user_id }});
-        Ok(res)
+        conn.execute(query(r#"
+                insert into messages(id, sender, receiver, message, timestamp)
+                values ($1, $2, $3, $4, $5)
+            "#)
+            .bind(message.id)
+            .bind(message.from)
+            .bind(message.to)
+            .bind(&message.message)
+            .bind(message.timestamp))
+            .await?;
+        Ok(())
+    }
+
+    async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
+        let res = self.pool.acquire().await?
+            .fetch_optional(query(r#"
+            select phc_string from auth where user_id = $1
+            "#).bind(user_id)).await?;
+
+        match res {
+            Some(row) => {
+                let phc_string: &str = row.get(0);
+                let auth_info = phc_string.parse()?;
+                Ok(Some(auth_info))
+            },
+            None => Ok(None),
+        }
+    }
+
+    async fn update_authentication(&self, user_id: &UserId, auth_info: pheidippides::db::AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
+        let mut transaction = self.pool.begin().await?;
+        transaction.execute(query("lock table auth in exclusive mode")).await?;
+        let old_auth = transaction.fetch_optional(query(
+                "select phc_string from auth where user_id = $1"
+            ).bind(user_id)).await?;
+
+        match old_auth {
+            Some(row) => {
+                let old_phc_string: &str = row.get(0);
+                let old_auth: AuthenticationInfo = old_phc_string.parse()?;
+                transaction.execute(query(
+                    "update auth set phc_string = $1 where user_id = $2"
+                ).bind(auth_info.phc_string().to_string()).bind(user_id)).await?;
+                transaction.commit().await?;
+                Ok(Some(old_auth))
+            },
+            None => {
+                transaction.execute(query(r#"
+                    insert into auth (user_id, phc_string) values ($1, $2)
+                    "#).bind(user_id).bind(auth_info.phc_string().to_string())).await?;
+                transaction.commit().await?;
+                Ok(None)
+            },
+        }
     }
 }
 

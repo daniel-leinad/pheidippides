@@ -71,6 +71,7 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
     fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
 }
 
+
 pub struct AuthenticationInfo {
     phc_string: password_hash::PasswordHashString,
 }

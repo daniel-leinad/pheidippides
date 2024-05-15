@@ -125,6 +125,19 @@ impl DataAccess for Db {
         Ok(self.users.lock()?.iter().map(|value| value.clone()).collect())
     }
 
+    async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
+        let mut table_locked = self.users.lock()?;
+
+        if table_locked.iter().filter(|record| record.1.to_lowercase() == username.to_lowercase()).next().is_some() {
+            return Ok(None)
+        };
+
+        let user_id = uuid::Uuid::new_v4();
+
+        table_locked.push((user_id.clone(), username.to_owned()));
+        Ok(Some(user_id))
+    }
+
     async fn find_users_chats(&self, user_id: &UserId) -> Result<Vec<User>, Error> {
         let users = self.fetch_users().await?;
         let users = {
@@ -156,7 +169,7 @@ impl DataAccess for Db {
             .rev()
             .skip_while(|msg_record| match &starting_point {
                 Some(starting_id) => msg_record.id != *starting_id,
-                None => false    
+                None => false
             })
             .skip(if starting_point.is_some() {1} else {0})
             .filter_map(|msg_record| {
@@ -172,59 +185,7 @@ impl DataAccess for Db {
 
         Ok(res)
     }
-    
-    async fn create_message(&self, message: &Message) -> Result<(), Error> {
-        let mut messages_lock = self.messages.lock()?;
-        let new_message = MessageRecord {
-            id: message.id,
-            from: message.from,
-            to: message.to,
-            message: message.message.to_owned(),
-            timestamp: message.timestamp,
-        };
-        messages_lock.push(new_message);
-        Ok(())
-    }
-    
-    async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
-        let res = self.auth.lock()?
-            .iter()
-            .filter_map(|record| 
-                if record.user_id == *user_id {
-                    Some(AuthenticationInfo::from(record.phc_string.clone()))
-                } else {
-                    None
-                })
-            .next();
-        Ok(res)
-    }
-    
-    async fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
-        let mut table_locked = self.auth.lock()?;
-        for record in table_locked.iter_mut() {
-            if record.user_id == *user_id {
-                let old_auth = record.phc_string.clone();
-                record.phc_string = auth_info.phc_string().clone();
-                return Ok(Some(old_auth.into()))
-            };
-        };
-        table_locked.push(AuthRecord{ user_id: user_id.clone(), phc_string: auth_info.phc_string().clone() });
-        Ok(None)
-    }
-    
-    async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
-        let mut table_locked = self.users.lock()?;
 
-        if table_locked.iter().filter(|record| record.1.to_lowercase() == username.to_lowercase()).next().is_some() {
-            return Ok(None)
-        };
-
-        let user_id = uuid::Uuid::new_v4();
-
-        table_locked.push((user_id.clone(), username.to_owned()));
-        Ok(Some(user_id))
-    }
-    
     async fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Self::Error> {
         let res = self.messages.lock()?
             .iter()
@@ -244,6 +205,45 @@ impl DataAccess for Db {
             })
             .collect();
         Ok(res)
+    }
+
+    async fn create_message(&self, message: &Message) -> Result<(), Error> {
+        let mut messages_lock = self.messages.lock()?;
+        let new_message = MessageRecord {
+            id: message.id,
+            from: message.from,
+            to: message.to,
+            message: message.message.to_owned(),
+            timestamp: message.timestamp,
+        };
+        messages_lock.push(new_message);
+        Ok(())
+    }
+
+    async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
+        let res = self.auth.lock()?
+            .iter()
+            .filter_map(|record|
+                if record.user_id == *user_id {
+                    Some(AuthenticationInfo::from(record.phc_string.clone()))
+                } else {
+                    None
+                })
+            .next();
+        Ok(res)
+    }
+
+    async fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
+        let mut table_locked = self.auth.lock()?;
+        for record in table_locked.iter_mut() {
+            if record.user_id == *user_id {
+                let old_auth = record.phc_string.clone();
+                record.phc_string = auth_info.phc_string().clone();
+                return Ok(Some(old_auth.into()))
+            };
+        };
+        table_locked.push(AuthRecord{ user_id: user_id.clone(), phc_string: auth_info.phc_string().clone() });
+        Ok(None)
     }
 }
 
