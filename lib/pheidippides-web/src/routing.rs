@@ -16,18 +16,18 @@ use pheidippides_utils::utils::{
 };
 use pheidippides_utils::serde::form_data as serde_form_data;
 
-use pheidippides_messenger::{data_access, MessageId, UserId};
+use pheidippides_messenger::{MessageId, UserId};
 use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::data_access::DataAccess;
 
 use crate::sessions;
 
 #[derive(Clone)]
-pub struct RequestHandler<D: data_access::DataAccess> {
+pub struct RequestHandler<D: DataAccess> {
     app: Messenger<D>,
 }
 
-impl<D: data_access::DataAccess> RequestHandler<D> {
+impl<D: DataAccess> RequestHandler<D> {
     pub fn new(db_access: D) -> Self {
         RequestHandler { app: Messenger::new(db_access) }
     }
@@ -52,7 +52,7 @@ impl std::fmt::Display for RequestHandlerError {
 
 impl std::error::Error for RequestHandlerError {}
 
-impl<D: data_access::DataAccess, T: AsyncRead + Unpin + Sync + Send> web_server::RequestHandler<Request<T>> for RequestHandler<D> {
+impl<D: DataAccess, T: AsyncRead + Unpin + Sync + Send> web_server::RequestHandler<Request<T>> for RequestHandler<D> {
     type Error = RequestHandlerError;
 
     fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
@@ -60,7 +60,7 @@ impl<D: data_access::DataAccess, T: AsyncRead + Unpin + Sync + Send> web_server:
     }
 }
 
-pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl data_access::DataAccess>) -> Result<Response, RequestHandlerError> {
+pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -183,7 +183,7 @@ struct AuthorizationParams {
     password: String,
 }
 
-async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl data_access::DataAccess>) -> Result<Response> {
+async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response> {
     let content = request.content().await?;
 
     let authorization_params: AuthorizationParams =
@@ -251,7 +251,7 @@ struct SendMessageParams {
     message: String,
 }
 
-async fn send_message<D: data_access::DataAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<D>, receiver: &str) -> Result<Response> {
+async fn send_message<D: DataAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<D>, receiver: &str) -> Result<Response> {
 
     let receiver: UserId = match receiver.parse() {
         Ok(res) => res,

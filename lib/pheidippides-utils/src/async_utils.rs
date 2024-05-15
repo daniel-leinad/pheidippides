@@ -1,6 +1,6 @@
 use tokio::sync::{broadcast, mpsc::{self, UnboundedReceiver, UnboundedSender}};
 
-pub fn pipe_unbounded_channel<I, O, F>(mut channel: mpsc::UnboundedReceiver<I>, mut f: F) -> mpsc::UnboundedReceiver<O> 
+pub fn pipe_unbounded_channel<I, O, F>(mut channel: UnboundedReceiver<I>, mut f: F) -> UnboundedReceiver<O>
 where
     I: 'static + Send, 
     O: 'static + Send, 
@@ -36,7 +36,7 @@ where
     receiver
 }
 
-pub fn pipe_broadcast<I, O, F>(mut in_channel: broadcast::Receiver<I>, mut f: F) -> mpsc::UnboundedReceiver<O> 
+pub fn pipe_broadcast<I, O, F>(mut in_channel: broadcast::Receiver<I>, mut f: F) -> UnboundedReceiver<O>
 where
     I: 'static + Send + Clone, 
     O: 'static + Send, 

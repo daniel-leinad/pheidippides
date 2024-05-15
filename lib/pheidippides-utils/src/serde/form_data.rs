@@ -160,7 +160,7 @@ pub enum Error {
     CantParseValue(String),
 }
 
-impl serde::de::Error for Error {
+impl de::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {
         Error::CustomMessage(msg.to_string())
     }
@@ -250,12 +250,12 @@ impl<'de> KeyValuePairs<'de> {
     }
 }
 
-impl<'de> serde::de::MapAccess<'de> for KeyValuePairs<'de> {
+impl<'de> de::MapAccess<'de> for KeyValuePairs<'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
     where
-        K: serde::de::DeserializeSeed<'de>,
+        K: de::DeserializeSeed<'de>,
     {
         if self.str.is_empty() {
             return Ok(None);
@@ -272,7 +272,7 @@ impl<'de> serde::de::MapAccess<'de> for KeyValuePairs<'de> {
 
     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
     where
-        V: serde::de::DeserializeSeed<'de>,
+        V: de::DeserializeSeed<'de>,
     {
         if self.str.is_empty() {
             return Err(Error::CantParseValue(self.str.into()));
@@ -299,21 +299,21 @@ impl<'de> de::Deserializer<'de> for StringValue<'de> {
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
-        V: serde::de::Visitor<'de>,
+        V: de::Visitor<'de>,
     {
         visitor.visit_string(decode(self.0))
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
-        V: serde::de::Visitor<'de>,
+        V: de::Visitor<'de>,
     {
         visitor.visit_string(decode(self.0))
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
-        V: serde::de::Visitor<'de>,
+        V: de::Visitor<'de>,
     {
         visitor.visit_borrowed_str("")
     }
@@ -351,7 +351,7 @@ impl<'de> de::Deserializer<'de> for StringValue<'de> {
     de_unsupported!(deserialize_struct, _name: &'static str, _fields: &'static [&'static str]);
 }
 
-fn decode<'a>(text: &'a str) -> String {
+fn decode(text: &str) -> String {
     let mut res = String::new();
     url_escape::decode_to_string(text.replace("+", " "), &mut res);
     res

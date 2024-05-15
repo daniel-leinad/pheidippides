@@ -68,7 +68,7 @@ pub async fn fetches_last_messages(db_access: &impl DataAccess) {
     for (id, from, to, msg) in messages {
         timestamp = timestamp + Duration::from_secs(1);
         db_access.create_message(&Message {
-            id: id,
+            id,
             from,
             to,
             message: msg.to_owned(),
@@ -133,7 +133,7 @@ pub async fn fetches_users_messages_since(db_access: &impl DataAccess) {
     for (id, from, to, msg) in messages {
         timestamp = timestamp + Duration::from_secs(1);
         db_access.create_message(&Message {
-            id: id,
+            id,
             from,
             to,
             message: msg.to_owned(),

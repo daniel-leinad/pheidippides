@@ -54,8 +54,8 @@ async fn run_server(db_access: impl data_access::DataAccess, addr: &str, cancell
     Ok(())
 }
 
-fn make_cancellation_token() -> tokio_util::sync::CancellationToken {
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
+fn make_cancellation_token() -> CancellationToken {
+    let cancellation_token = CancellationToken::new();
 
     let cloned_token = cancellation_token.clone();
     tokio::spawn(async move {

@@ -26,7 +26,7 @@ impl<D: DataAccess> SubscriptionsHandler<D> {
         SubscriptionsHandler { data_access, new_messages: new_messages_subscriptions }
     }
 
-    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> anyhow::Result<tokio::sync::mpsc::UnboundedReceiver<Message>> {
+    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> anyhow::Result<mpsc::UnboundedReceiver<Message>> {
         let subscription = {
             // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
             let mut subscriptions_lock = match self.new_messages.write() {

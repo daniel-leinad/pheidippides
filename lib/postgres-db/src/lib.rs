@@ -20,13 +20,13 @@ const DB_VERSION: i64 = 2;
 
 #[derive(Clone)]
 pub struct Db {
-    pool: sqlx::PgPool,
+    pool: PgPool,
 }
 
 impl Db {
     pub async fn new(connection_string: &str) -> Result<Self> {
         let options: PgConnectOptions = connection_string.parse()?;
-        let pool = sqlx::PgPool::connect_with(options).await?;
+        let pool = PgPool::connect_with(options).await?;
 
         Ok(Db { pool })
     }

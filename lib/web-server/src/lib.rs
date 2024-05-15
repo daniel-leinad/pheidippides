@@ -69,7 +69,7 @@ impl FromStr for Method {
 impl Request<TcpStream> {
 
     pub async fn respond(self, response: Response) -> Result<()> {
-        let mut writer = tokio::io::BufWriter::new(self.reader.into_inner());
+        let mut writer = BufWriter::new(self.reader.into_inner());
         let http_response = 
         match response {
             Response::Text{text, headers} => {
@@ -215,7 +215,7 @@ pub enum Response {
     },
     EventSource{
         retry: Option<i32>,
-        stream: tokio::sync::mpsc::UnboundedReceiver<EventSourceEvent>,
+        stream: UnboundedReceiver<EventSourceEvent>,
     },
     BadRequest,
     InternalServerError,

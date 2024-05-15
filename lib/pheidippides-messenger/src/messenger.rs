@@ -85,8 +85,8 @@ impl<D: DataAccess> Messenger<D> {
     pub async fn send_message(&self, message_text: String, from: UserId, to: UserId) -> Result<MessageId> {
         let message = Message {
             id: uuid::Uuid::new_v4(),
-            from: from,
-            to: to,
+            from,
+            to,
             message: message_text,
             timestamp: chrono::Utc::now(),
         };
