@@ -32,12 +32,12 @@ pub async fn doesnt_fetch_nonexistent_users(db_access: &impl DataAccess) {
 pub async fn it_creates_message(db_access: &impl DataAccess) {
     let sender_id = db_access.create_user("__Test_Sender").await.unwrap().unwrap();
     let receiver_id = db_access.create_user("__Test_Receiver").await.unwrap().unwrap();
-    let message = Message{ 
-        id: uuid!("5b438594-81bc-48ce-8694-e2c14dcd45dc"), 
-        from: sender_id, 
-        to: receiver_id, 
-        message: "Test message".to_owned(), 
-        timestamp: chrono::Utc::now(), 
+    let message = Message{
+        id: uuid!("5b438594-81bc-48ce-8694-e2c14dcd45dc"),
+        from: sender_id,
+        to: receiver_id,
+        message: "Test message".to_owned(),
+        timestamp: chrono::Utc::now(),
     };
 
     db_access.create_message(&message).await.unwrap();
@@ -67,11 +67,11 @@ pub async fn fetches_last_messages(db_access: &impl DataAccess) {
 
     for (id, from, to, msg) in messages {
         timestamp = timestamp + Duration::from_secs(1);
-        db_access.create_message(&Message { 
-            id: id, 
-            from, 
-            to, 
-            message: msg.to_owned(), 
+        db_access.create_message(&Message {
+            id: id,
+            from,
+            to,
+            message: msg.to_owned(),
             timestamp,
         }).await.unwrap();
     };
@@ -132,11 +132,11 @@ pub async fn fetches_users_messages_since(db_access: &impl DataAccess) {
 
     for (id, from, to, msg) in messages {
         timestamp = timestamp + Duration::from_secs(1);
-        db_access.create_message(&Message { 
-            id: id, 
-            from, 
-            to, 
-            message: msg.to_owned(), 
+        db_access.create_message(&Message {
+            id: id,
+            from,
+            to,
+            message: msg.to_owned(),
             timestamp,
         }).await.unwrap();
     };
@@ -146,9 +146,41 @@ pub async fn fetches_users_messages_since(db_access: &impl DataAccess) {
         .await
         .unwrap()
         .into_iter();
-    
+
     assert_eq!(&users_messages_since.next().unwrap().message, "Message 4");
     assert_eq!(&users_messages_since.next().unwrap().message, "Message 5");
     assert_eq!(&users_messages_since.next().unwrap().message, "Message 8");
     assert_eq!(users_messages_since.next(), None);
+}
+
+mod mock_db {
+    use mock_db::Db;
+
+    macro_rules! test {
+        ($name:ident) => {
+            #[tokio::test]
+            async fn $name() {
+                let db_access = Db::new().await;
+                super::$name(&db_access).await;
+            }
+        };
+    }
+
+    db_access_tests! {test}
+}
+
+mod pg_db {
+    use postgres_db::Db;
+
+    macro_rules! test {
+        ($name:ident) => {
+            #[sqlx::test(migrator = "postgres_db::MIGRATOR")]
+            async fn $name(pool: sqlx::PgPool) {
+                let db_access = Db::from_pool(pool);
+                super::$name(&db_access).await;
+            }
+        };
+    }
+
+    db_access_tests!{test}
 }

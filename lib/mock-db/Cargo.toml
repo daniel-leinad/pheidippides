@@ -11,6 +11,6 @@ password-hash = "0.5.0"
 uuid = "1.8.0"
 
 [dev-dependencies]
-pheidippides-db-tests = { path = "../pheidippides-db-tests" }
-
-tokio = "1.37.0"
+#pheidippides-db-tests = { path = "../pheidippides-db-tests" }
+#
+#tokio = "1.37.0"

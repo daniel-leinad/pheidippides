@@ -9,8 +9,12 @@ pheidippides-messenger = { path = "../lib/pheidippides-messenger" }
 pheidippides-web = { path = "../lib/pheidippides-web" }
 web-server = { path = "../lib/web-server" }
 mock-db = { path = "../lib/mock-db" }
+postgres-db = { path = "../lib/postgres-db" }
 tokio = "1.37.0"
 tokio-test = "0.4.4"
+uuid = "1.8.0"
+chrono = "0.4.38"
+sqlx = { version = "0.7.4", features = ["postgres"] }
 
 [[test]]
 name = "app"
@@ -23,3 +27,7 @@ path = "http.rs"
 [[test]]
 name = "routing"
 path = "routing.rs"
+
+[[test]]
+name = "data_access"
+path = "data_access.rs"

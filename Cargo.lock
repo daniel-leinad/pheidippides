@@ -897,9 +897,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "password-hash",
- "pheidippides-db-tests",
  "pheidippides-messenger",
- "tokio",
  "uuid",
 ]
 
@@ -1041,15 +1039,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
-name = "pheidippides-db-tests"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "pheidippides-messenger",
- "uuid",
-]
-
-[[package]]
 name = "pheidippides-messenger"
 version = "0.1.0"
 dependencies = [
@@ -1138,7 +1127,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "pheidippides-db-tests",
  "pheidippides-messenger",
  "sqlx",
  "thiserror",
@@ -1672,11 +1660,15 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "mock-db",
  "pheidippides-messenger",
  "pheidippides-web",
+ "postgres-db",
+ "sqlx",
  "tokio",
  "tokio-test",
+ "uuid",
  "web-server",
 ]
 

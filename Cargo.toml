@@ -7,7 +7,6 @@ members = [
     "lib/web-server",
     "lib/postgres-db",
     "lib/mock-db",
-    "lib/pheidippides-db-tests",
     "tests",
     
     "bin/server",

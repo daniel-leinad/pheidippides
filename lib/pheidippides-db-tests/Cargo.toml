@@ -1,9 +1,0 @@
-[package]
-name = "pheidippides-db-tests"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-chrono = "0.4.38"
-uuid = "1.8.0"
-pheidippides-messenger = { path = "../pheidippides-messenger" }

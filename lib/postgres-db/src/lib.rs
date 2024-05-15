@@ -15,7 +15,7 @@ use pheidippides_messenger::db::{
     AuthenticationInfo, DataAccess, MESSAGE_LOAD_BUF_SIZE
 };
 
-const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
+pub const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 const DB_VERSION: i64 = 2;
 
 #[derive(Clone)]
@@ -372,16 +372,4 @@ mod tests {
         let input = r#"weird table , - ; " : "#;
         assert_eq!(pg_id(input), r#""weird table , - ; "" : ""#);
     }
-
-    macro_rules! test_db_access {
-        ($name:ident) => {
-            #[sqlx::test(migrator = "MIGRATOR")]
-            async fn $name(pool: PgPool) {
-                let db_access = Db::from_pool(pool);
-                pheidippides_db_tests::$name(&db_access).await;
-            }
-        };
-    }
-
-    pheidippides_db_tests::db_access_tests!{test_db_access}
 }

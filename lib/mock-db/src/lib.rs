@@ -246,20 +246,3 @@ impl DataAccess for Db {
         Ok(None)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::Db;
-    
-    macro_rules! test {
-        ($name:ident) => {
-            #[tokio::test]
-            async fn $name() {
-                let db_access = Db::new().await;
-                pheidippides_db_tests::$name(&db_access).await;
-            }
-        };
-    }
-
-    pheidippides_db_tests::db_access_tests!{test}
-}
