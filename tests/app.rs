@@ -2,10 +2,11 @@
 use std::assert_matches::assert_matches;
 
 use pheidippides::{app, db};
+use mock_db;
 
 #[tokio::test]
 async fn subscribes_to_new_messages_without_starting_point() {
-    let db_access = db::mock::Db::new().await;
+    let db_access = mock_db::Db::new().await;
     let app = app::App::new(db_access);
     let user_id_1 = app.create_user("TestUser_1", "12345".into()).await.unwrap().unwrap();
     let user_id_2 = app.create_user("TestUser_2", "12345".into()).await.unwrap().unwrap();
@@ -30,7 +31,7 @@ async fn subscribes_to_new_messages_without_starting_point() {
 
 #[tokio::test]
 async fn subscribtions_to_new_messages_without_starting_point_dont_conflict() {
-    let db_access = db::mock::Db::new().await;
+    let db_access = mock_db::Db::new().await;
     let app = app::App::new(db_access);
     let user_id_1 = app.create_user("TestUser_1", "12345".into()).await.unwrap().unwrap();
     let user_id_2 = app.create_user("TestUser_2", "12345".into()).await.unwrap().unwrap();
@@ -59,7 +60,7 @@ async fn subscribtions_to_new_messages_without_starting_point_dont_conflict() {
 
 #[tokio::test]
 async fn subscribes_to_new_messages_with_starting_point() {
-    let db_access = db::mock::Db::new().await;
+    let db_access = mock_db::Db::new().await;
     let app = app::App::new(db_access);
     let user_id_1 = app.create_user("TestUser_1", "12345".into()).await.unwrap().unwrap();
     let user_id_2 = app.create_user("TestUser_2", "12345".into()).await.unwrap().unwrap();

@@ -1,0 +1,15 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pheidippides = {path="../../pheidippides"}
+web-server = {path = "../../web-server"}
+postgres-db = {path = "../../postgres-db"}
+mock-db = {path = "../../mock-db"}
+
+anyhow = "1.0.83"
+clap = { version = "4.5.4", features = ["derive"] }
+tokio = { version = "1.37.0", features = ["macros", "rt", "rt-multi-thread", "signal"] }
+tokio-util = "0.7.11"

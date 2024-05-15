@@ -1,0 +1,10 @@
+[package]
+name = "migrate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+postgres-db = {path = "../../postgres-db"}
+anyhow = "1.0.83"
+clap = { version = "4.5.4", features = ["derive"] }
+tokio = { version = "1.37.0", features = ["macros", "rt", "rt-multi-thread"] }

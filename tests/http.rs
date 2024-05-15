@@ -1,4 +1,4 @@
-use pheidippides::http;
+use web_server::http;
 use std::collections::HashMap;
 
 #[tokio::test]

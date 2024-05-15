@@ -1,4 +1,6 @@
-use pheidippides::{http, routing, db, app};
+use web_server::{http, routing};
+use pheidippides::app;
+use mock_db;
 
 #[tokio::test]
 async fn returns_bad_request_for_wrong_url() {
@@ -7,7 +9,7 @@ async fn returns_bad_request_for_wrong_url() {
         .read(b"\r\n")
         .build();
     let mut request = http::Request::try_from_stream(reader).await.unwrap();
-    let db_access = db::mock::Db::new().await;
+    let db_access = mock_db::Db::new().await;
     let app = app::App::new(db_access);
     let response = routing::handle_request(&mut request, app).await.unwrap();
     let is_bad_request = if let http::Response::BadRequest = response {true} else {false};
