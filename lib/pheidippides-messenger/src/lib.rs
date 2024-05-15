@@ -3,7 +3,7 @@ use serde::Serialize;
 use chrono::DateTime;
 use crate::data_access::DataAccess;
 
-pub mod app;
+pub mod messenger;
 pub mod data_access;
 pub mod authorization;
 

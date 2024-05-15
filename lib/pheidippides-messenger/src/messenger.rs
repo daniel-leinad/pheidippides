@@ -14,7 +14,7 @@ use crate::{authorization, User, Message, MessageId, UserId};
 const SUBSCRIPTIONS_CLEANUP_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
-pub struct App<D: DataAccess> {
+pub struct Messenger<D: DataAccess> {
     db_access: D,
     new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>,
 }
@@ -23,13 +23,13 @@ pub enum UserCreationError {
     UsernameTaken,
 }
 
-impl<D: DataAccess> App<D> {
+impl<D: DataAccess> Messenger<D> {
     pub fn new(db_access: D) -> Self {
         let new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>  = Arc::new(RwLock::new(HashMap::new()));
 
         Self::spawn_subscription_cleanup_job(new_messages_subscriptions.clone());
         
-        App { db_access, new_messages_subscriptions }
+        Messenger { db_access, new_messages_subscriptions }
     }
 
     fn spawn_subscription_cleanup_job(new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>) {

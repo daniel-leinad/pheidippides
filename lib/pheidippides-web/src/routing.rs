@@ -17,19 +17,19 @@ use pheidippides_utils::utils::{
 use pheidippides_utils::serde::form_data as serde_form_data;
 
 use pheidippides_messenger::{data_access, MessageId, UserId};
-use pheidippides_messenger::app::App;
+use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::data_access::DataAccess;
 
 use crate::sessions;
 
 #[derive(Clone)]
 pub struct RequestHandler<D: data_access::DataAccess> {
-    app: App<D>,
+    app: Messenger<D>,
 }
 
 impl<D: data_access::DataAccess> RequestHandler<D> {
     pub fn new(db_access: D) -> Self {
-        RequestHandler { app: App::new(db_access) }
+        RequestHandler { app: Messenger::new(db_access) }
     }
 }
 
@@ -60,7 +60,7 @@ impl<D: data_access::DataAccess, T: AsyncRead + Unpin + Sync + Send> web_server:
     }
 }
 
-pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl data_access::DataAccess>) -> Result<Response, RequestHandlerError> {
+pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl data_access::DataAccess>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -128,7 +128,7 @@ fn main_page<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
 
 async fn chat_page<D: DataAccess, T: AsyncRead + Unpin>(
     request: &Request<T>,
-    app: App<D>,
+    app: Messenger<D>,
     _chat_id: Option<&str>,
 ) -> Result<Response> {
     
@@ -183,7 +183,7 @@ struct AuthorizationParams {
     password: String,
 }
 
-async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl data_access::DataAccess>) -> Result<Response> {
+async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl data_access::DataAccess>) -> Result<Response> {
     let content = request.content().await?;
 
     let authorization_params: AuthorizationParams =
@@ -221,7 +221,7 @@ enum SignupError {
     UsernameTaken,
 }
 
-async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl DataAccess>) -> Result<Response> {
+async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response> {
     let content = request.content().await?;
     let auth_params: AuthorizationParams = match serde_json::from_str(&content) {
         Ok(auth_params) => auth_params,
@@ -251,7 +251,7 @@ struct SendMessageParams {
     message: String,
 }
 
-async fn send_message<D: data_access::DataAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<D>, receiver: &str) -> Result<Response> {
+async fn send_message<D: data_access::DataAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<D>, receiver: &str) -> Result<Response> {
 
     let receiver: UserId = match receiver.parse() {
         Ok(res) => res,
@@ -292,7 +292,7 @@ struct SubscribeNewMessagesParams {
     last_message_id: Option<String>,
 }
 
-async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl DataAccess>, params: &str) -> Result<Response> {
+async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: Messenger<impl DataAccess>, params: &str) -> Result<Response> {
     let user_id = match get_authorization(request.headers())? {
         Some(user_id) => user_id, 
         None => return Ok(Response::BadRequest)
