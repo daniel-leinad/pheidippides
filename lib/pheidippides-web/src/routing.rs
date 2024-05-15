@@ -325,7 +325,7 @@ async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app:
 
     let starting_point = last_message_id_header.or(last_message_id_params);
 
-    let subscription = app.subscribe_new_messages(user_id, starting_point).await?;
+    let subscription = app.subscribe_to_new_messages(user_id, starting_point).await?;
 
     let stream = async_utils::pipe_unbounded_channel(
         subscription, 

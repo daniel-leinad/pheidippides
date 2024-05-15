@@ -41,7 +41,7 @@ struct LoginFailPage {}
 
 pub async fn chat_page(app: &Messenger<impl data_access::DataAccess>, user_id: &UserId) -> Result<String> {
     let username = app
-         .username(&user_id).await?
+         .fetch_username(&user_id).await?
          .with_context(|| format!("Incorrect user id: {user_id}"))?;
     
     let users_chats = app.fetch_users_chats(user_id).await?;

@@ -13,7 +13,7 @@ async fn subscribes_to_new_messages_without_starting_point() {
     let user_id_3 = app.create_user("TestUser_3", "12345".into()).await.unwrap().unwrap();
     app.send_message("Message 1".into(), user_id_1, user_id_2).await.unwrap();
     app.send_message("Message 2".into(), user_id_2, user_id_1).await.unwrap();
-    let mut subscription = app.subscribe_new_messages(user_id_1, None).await.unwrap();
+    let mut subscription = app.subscribe_to_new_messages(user_id_1, None).await.unwrap();
     app.send_message("Message 3".into(), user_id_2, user_id_1).await.unwrap();
     app.send_message("Message 4".into(), user_id_1, user_id_2).await.unwrap();
     app.send_message("Message 5".into(), user_id_2, user_id_3).await.unwrap();
@@ -38,11 +38,11 @@ async fn subscribtions_to_new_messages_without_starting_point_dont_conflict() {
     let user_id_3 = app.create_user("TestUser_3", "12345".into()).await.unwrap().unwrap();
     app.send_message("Message 1".into(), user_id_1, user_id_2).await.unwrap();
     app.send_message("Message 2".into(), user_id_2, user_id_1).await.unwrap();
-    let mut subscription1 = app.subscribe_new_messages(user_id_1, None).await.unwrap();
+    let mut subscription1 = app.subscribe_to_new_messages(user_id_1, None).await.unwrap();
     app.send_message("Message 3".into(), user_id_2, user_id_1).await.unwrap();
     app.send_message("Message 4".into(), user_id_1, user_id_2).await.unwrap();
     app.send_message("Message 5".into(), user_id_2, user_id_3).await.unwrap();
-    let mut subscription2 = app.subscribe_new_messages(user_id_1, None).await.unwrap();
+    let mut subscription2 = app.subscribe_to_new_messages(user_id_1, None).await.unwrap();
     app.send_message("Message 6".into(), user_id_3, user_id_1).await.unwrap();
 
     assert_matches!(subscription1.recv().await.unwrap(), 
@@ -71,7 +71,7 @@ async fn subscribes_to_new_messages_with_starting_point() {
     app.send_message("Message 4".into(), user_id_1, user_id_2).await.unwrap();
     app.send_message("Message 5".into(), user_id_2, user_id_3).await.unwrap();
     app.send_message("Message 6".into(), user_id_3, user_id_1).await.unwrap();
-    let mut subscription = app.subscribe_new_messages(user_id_1, Some(starting_point)).await.unwrap();
+    let mut subscription = app.subscribe_to_new_messages(user_id_1, Some(starting_point)).await.unwrap();
 
     assert_matches!(subscription.recv().await.unwrap(), 
         Message{ from, to, message, ..} if from == user_id_1 && to == user_id_2 && &message == "Message 4");

@@ -54,6 +54,18 @@ impl<D: DataAccess> Messenger<D> {
         }
     }
 
+    pub async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>> {
+        let user = self.data_access
+            .fetch_user(user_id).await
+            .with_context(|| format!("Couldn't fetch user with id {user_id}"))?;
+        Ok(user)
+    }
+
+    pub async fn fetch_username(&self, user_id: &UserId) -> Result<Option<String>> {
+        let user = self.fetch_user(user_id).await?;
+        Ok(user.map(|user| user.username))
+    }
+
     pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<User>> {
         
         let chats = self.data_access
@@ -63,16 +75,11 @@ impl<D: DataAccess> Messenger<D> {
         Ok(chats)
     }
 
-    pub async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>> {
-        let user = self.data_access
-            .fetch_user(user_id).await
-            .with_context(|| format!("Couldn't fetch user with id {user_id}"))?;
-        Ok(user)
-    }
-
-    pub async fn username(&self, user_id: &UserId) -> Result<Option<String>> {
-        let user = self.fetch_user(user_id).await?;
-        Ok(user.map(|user| user.username))
+    pub async fn find_users_by_substring(&self, substring: &str) -> Result<Vec<User>> {
+        let users = self.data_access
+            .find_users_by_substring(substring).await
+            .with_context(|| format!("Could't process users search request by substring: {substring}"))?;
+        Ok(users)
     }
 
     pub async fn send_message(&self, message_text: String, from: UserId, to: UserId) -> Result<MessageId> {
@@ -95,20 +102,13 @@ impl<D: DataAccess> Messenger<D> {
         Ok(message.id)
     }
 
-    pub async fn find_users_by_substring(&self, substring: &str) -> Result<Vec<User>> {
-        let users = self.data_access
-            .find_users_by_substring(substring).await
-            .with_context(|| format!("Could't process users search request by substring: {substring}"))?;
-        Ok(users)
-    }
-
     pub async fn fetch_last_messages(&self, current_user: &UserId, other_user: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>> {
         self.data_access.fetch_last_messages_in_chat(current_user, other_user, starting_point).await
             .with_context(|| format!("Could not fetch last messages.\
                 current_user: {current_user}, other_user: {other_user}, starting_point: {starting_point:?}"))
     }
 
-    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> Result<mpsc::UnboundedReceiver<Message>> {
+    pub async fn subscribe_to_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> Result<mpsc::UnboundedReceiver<Message>> {
         self.subscriptions_handler.subscribe_new_messages(user_id, starting_point).await
     }
 
