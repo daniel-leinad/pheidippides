@@ -19,7 +19,6 @@ pub enum UserCreationError {
 impl<D: DataAccess> Messenger<D> {
     pub fn new(data_access: D) -> Self {
         let subscriptions_handler = SubscriptionsHandler::new(data_access.clone());
-        
         Messenger { data_access, subscriptions_handler }
     }
 

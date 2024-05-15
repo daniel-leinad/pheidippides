@@ -72,6 +72,7 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
 }
 
 
+// TODO auth logic does not belong here
 pub struct AuthenticationInfo {
     phc_string: password_hash::PasswordHashString,
 }

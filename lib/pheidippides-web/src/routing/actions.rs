@@ -8,6 +8,7 @@ use pheidippides_utils::serde::form_data;
 use pheidippides_utils::utils::{CaseInsensitiveString, get_cookies_hashmap, header_set_cookie};
 use web_server::{EventSourceEvent, Request, Response};
 use crate::{routing, sessions};
+use crate::routing::json::MessageJson;
 
 pub fn logout<T: AsyncRead + Unpin>(request: &Request<T>) -> anyhow::Result<Response> {
     let headers = request.headers();
@@ -178,11 +179,10 @@ pub async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, 
     let stream = async_utils::pipe_unbounded_channel(
         subscription,
         |message| {
-            Some(EventSourceEvent {
-                data: serde_json::json!(message).to_string(),
-                id: message.id.to_string(),
-                event: None,
-            })
+            let id = message.id.to_string();
+            let data = serde_json::json!(MessageJson::from(message)).to_string();
+            let event = None;
+            Some(EventSourceEvent { data, id, event })
     });
 
     Ok(Response::EventSource { retry: None, stream })

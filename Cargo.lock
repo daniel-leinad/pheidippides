@@ -1048,7 +1048,6 @@ dependencies = [
  "password-hash",
  "pheidippides-utils",
  "rand_core",
- "serde",
  "thiserror",
  "tokio",
  "uuid",
@@ -1072,6 +1071,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "askama",
+ "chrono",
  "once_cell",
  "pheidippides-messenger",
  "pheidippides-utils",

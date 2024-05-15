@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncRead;
+use chrono::DateTime;
 
 use pheidippides_utils::serde::form_data as serde_form_data;
 
@@ -12,6 +13,32 @@ use pheidippides_messenger::{Message, MessageId, UserId};
 
 use crate::routing::get_authorization;
 
+
+#[derive(Serialize)]
+pub struct MessageJson {
+    #[serde(serialize_with = "pheidippides_utils::serde::serialize_uuid")]
+    pub id: MessageId,
+    #[serde(serialize_with = "pheidippides_utils::serde::serialize_uuid")]
+    pub from: UserId,
+    #[serde(serialize_with = "pheidippides_utils::serde::serialize_uuid")]
+    pub to: UserId,
+    pub message: String,
+    #[serde(serialize_with = "pheidippides_utils::serde::serialize_datetime")]
+    pub timestamp: DateTime<chrono::Utc>,
+}
+
+impl From<Message> for MessageJson {
+    fn from(message: Message) -> Self {
+        Self {
+            id: message.id,
+            from: message.from,
+            to: message.to,
+            message: message.message,
+            timestamp: message.timestamp,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 struct MessagesUrlParams {
     from: Option<String>,
@@ -20,7 +47,7 @@ struct MessagesUrlParams {
 #[derive(Serialize)]
 struct MessagesResponse {
     success: bool,
-    messages: Vec<Message>,
+    messages: Vec<MessageJson>,
     error: Option<MessageResponseError>,
 }
 
@@ -65,6 +92,7 @@ pub async fn messages_json<T: AsyncRead + Unpin>(request: &Request<T>, app: Mess
     let messages: Vec<_> = app
         .fetch_last_messages(&user_id, &chat_id, starting_from).await?
         .into_iter()
+        .map(|message| message.into())
         .rev()
         .collect();
     
