@@ -9,10 +9,10 @@ use tokio::task::JoinError;
 use tokio_util::sync::CancellationToken;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{Executor, PgPool, query, Row};
-use pheidippides::{Chat, Message, MessageId, UserId};
+use pheidippides::{User, Message, MessageId, UserId};
 
 use pheidippides::db::{
-    AuthenticationInfo, DbAccess, MESSAGE_LOAD_BUF_SIZE
+    AuthenticationInfo, DataAccess, MESSAGE_LOAD_BUF_SIZE
 };
 
 const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
@@ -86,10 +86,10 @@ pub enum Error {
     AuthInfoParsingError(#[from] pheidippides::db::AuthenticationInfoParsingError),
 }
 
-impl DbAccess for Db {
+impl DataAccess for Db {
     type Error = Error;
 
-    async fn users(&self) -> Result<Vec<(UserId, String)>, Self::Error> {
+    async fn fetch_users(&self) -> Result<Vec<(UserId, String)>, Self::Error> {
 
         let res = self.pool.acquire().await?
         .fetch_all("select user_id, username from users").await?
@@ -102,7 +102,7 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn chats(&self, user_id: &UserId) -> Result<Vec<Chat>, Self::Error> {
+    async fn find_users_chats(&self, user_id: &UserId) -> Result<Vec<User>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let temp_table_chat_ids = temp_table_name("chat_ids");
@@ -147,7 +147,7 @@ impl DbAccess for Db {
             order by last_messages.timestamp desc
             "#))).await?
             .iter()
-            .map(|row| {Chat{id: row.get(0), username: row.get(1)}})
+            .map(|row| { User {id: row.get(0), username: row.get(1)}})
             .collect();
 
         conn.execute(query(&format!("drop table {temp_table_chat_ids_grouped};"))).await?;
@@ -155,7 +155,7 @@ impl DbAccess for Db {
         Ok(res)
     }
     
-    async fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>)-> Result<Vec<Message>, Self::Error> {
+    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let mut query_builder = sqlx::QueryBuilder::new("");
         query_builder.push(r#"
@@ -213,7 +213,7 @@ impl DbAccess for Db {
         Ok(())
     }
     
-    async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
+    async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
         let res = self.pool.acquire().await?
             .fetch_optional(query(r#"
             select phc_string from auth where user_id = $1
@@ -288,7 +288,7 @@ impl DbAccess for Db {
         Ok(res.map(|row| row.get(0)))
     }
 
-    async fn user_id(&self, requested_username: &str) -> Result<Option<UserId>, Error> {
+    async fn find_user_by_username(&self, requested_username: &str) -> Result<Option<UserId>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_optional(query(r#"
             select user_id from users where lower(username) = $1
@@ -296,7 +296,7 @@ impl DbAccess for Db {
         Ok(res.map(|row| row.get(0))) 
     }
     
-    async fn find_chats(&self, search_query: &str) -> Result<Vec<Chat>, Error> {
+    async fn find_users(&self, search_query: &str) -> Result<Vec<User>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_all(query(r#"
                 select user_id, username from users where lower(username) like $1
@@ -305,13 +305,13 @@ impl DbAccess for Db {
             .map(|row| {
                 let id = row.get(0);
                 let username = row.get(1);
-                Chat{ username, id }
+                User { username, id }
             })
             .collect();
         Ok(res)
     }
     
-    async fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Error> {
+    async fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Error> {
         let mut conn = self.pool.acquire().await?;
 
         let msg_timestamp: Option<DateTime<chrono::Utc>> = conn
@@ -344,11 +344,11 @@ impl DbAccess for Db {
         Ok(res)
     }
 
-    async fn chat(&self, user_id: &UserId) -> Result<Option<Chat>, Error> {
+    async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn
             .fetch_optional(query("select username from users where users.user_id = $1").bind(user_id)).await?
-            .map(|row| {Chat{ username: row.get(0), id: *user_id }});
+            .map(|row| { User { username: row.get(0), id: *user_id }});
         Ok(res)
     }
 }

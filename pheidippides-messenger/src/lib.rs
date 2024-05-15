@@ -1,7 +1,7 @@
 use uuid::Uuid;
 use serde::Serialize;
 use chrono::DateTime;
-use crate::db::DbAccess;
+use crate::db::DataAccess;
 
 pub mod app;
 pub mod db;
@@ -11,15 +11,15 @@ pub type MessageId = Uuid;
 pub type UserId = Uuid;
 
 #[derive(PartialEq, Hash)]
-pub struct Chat {
+pub struct User {
     pub username: String,
     pub id: UserId,
 }
 
-impl Chat {
-    pub fn new<T: DbAccess>(id: UserId, username: String) -> Self
+impl User {
+    pub fn new<T: DataAccess>(id: UserId, username: String) -> Self
     {
-        Chat {username, id}
+        User {username, id}
     }
 }
 

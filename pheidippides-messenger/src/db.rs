@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use crate::{Chat, Message, MessageId, UserId};
+use crate::{User, Message, MessageId, UserId};
 
 pub const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 
@@ -15,22 +15,22 @@ macro_rules! async_result {
 }
 
 // TODO rewrite trait to accept references as much as possible
-pub trait DbAccess: 'static + Send + Sync + Clone {
+pub trait DataAccess: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;
 
     // fn users(&self) -> impl Future<Output = Result<Vec<(UserId, String)>, Self::Error>> + Send;
-    fn users(&self) -> async_result!(Vec<(UserId, String)>);
-    fn chats(&self, user_id: &UserId) -> async_result!(Vec<Chat>);
-    fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>)-> async_result!(Vec<Message>);
-    fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> async_result!(Vec<Message>);
+    fn fetch_users(&self) -> async_result!(Vec<(UserId, String)>);
+    fn find_users_chats(&self, user_id: &UserId) -> async_result!(Vec<User>);
+    fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> async_result!(Vec<Message>);
+    fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> async_result!(Vec<Message>);
     fn create_message(&self, message: &Message) -> async_result!(());
-    fn authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
+    fn fetch_authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
     fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
     fn create_user(&self, username: &str) -> async_result!(Option<UserId>);
     
     fn username(&self, user_id: &UserId) -> async_result!(Option<String>) {
         async move {
-            let users = self.users().await?;
+            let users = self.fetch_users().await?;
             let res = users  
                 .into_iter()
                 .filter_map(|(id, username)| {if &id == user_id {Some(username)} else {None}})
@@ -39,10 +39,10 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
         }
     }
 
-    fn user_id(&self, requested_username: &str) -> async_result!(Option<UserId>) {
+    fn find_user_by_username(&self, requested_username: &str) -> async_result!(Option<UserId>) {
         async move {
             let res = self
-                .users().await?
+                .fetch_users().await?
                 .into_iter()
                 .filter_map(|(id, username)| {if username.to_lowercase() == requested_username.to_lowercase() {Some(id)} else {None}})
                 .next();
@@ -50,12 +50,12 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
         }
     }
 
-    fn find_chats(&self, search_query: &str) -> async_result!(Vec<Chat>) {
+    fn find_users(&self, search_query: &str) -> async_result!(Vec<User>) {
         async {
             let search_query = search_query.to_lowercase();
-            let res = self.users().await?.into_iter().filter_map(|(user_id, username)| {
+            let res = self.fetch_users().await?.into_iter().filter_map(|(user_id, username)| {
                 if username.to_lowercase().contains(&search_query) {
-                    Some(Chat::new::<Self>(user_id, username))
+                    Some(User::new::<Self>(user_id, username))
                 } else {
                     None
                 }
@@ -64,14 +64,14 @@ pub trait DbAccess: 'static + Send + Sync + Clone {
         }
     }
 
-    fn chat(&self, user_id: &UserId) -> async_result!(Option<Chat>) {
+    fn fetch_user(&self, user_id: &UserId) -> async_result!(Option<User>) {
         async move {
-            let chat_info = self.users().await?
+            let chat_info = self.fetch_users().await?
                 .into_iter().filter_map(|(id, username)| {
                     if &id == user_id {
                         let id = id.to_owned();
                         let username = username.to_owned();
-                        Some(Chat { username, id })
+                        Some(User { username, id })
                     } else {
                         None
                     }

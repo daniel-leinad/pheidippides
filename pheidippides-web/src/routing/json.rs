@@ -29,7 +29,7 @@ enum MessageResponseError {
     Unauthorized,
 }
 
-pub async fn messages_json<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl db::DbAccess>, chat_id: &str, params: &str) -> Result<Response> {
+pub async fn messages_json<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl db::DataAccess>, chat_id: &str, params: &str) -> Result<Response> {
 
     let chat_id: UserId = match chat_id.parse() {
         Ok(chat_id) => chat_id,

@@ -7,7 +7,7 @@ use web_server::{Request, Response};
 
 use pheidippides_utils::serde::form_data as serde_form_data;
 
-use pheidippides::{Chat, UserId};
+use pheidippides::{User, UserId};
 use pheidippides::db::{self};
 use pheidippides::app::App;
 
@@ -18,13 +18,13 @@ use crate::routing::get_authorization;
 struct ChatPage<'a> {
     username: &'a str,
     user_id: &'a UserId,
-    chats: Vec<Chat>,
+    chats: Vec<User>,
 }
 
 #[derive(Template)]
 #[template(path = "elements/chats.html")]
 struct ChatHtmlElements {
-    chats: Vec<Chat>,
+    chats: Vec<User>,
 }
 
 #[derive(Template)]
@@ -39,7 +39,7 @@ struct SignUpPage {}
 #[template(path = "login_fail.html")]
 struct LoginFailPage {}
 
-pub async fn chat_page(app: &App<impl db::DbAccess>, user_id: &UserId) -> Result<String> {
+pub async fn chat_page(app: &App<impl db::DataAccess>, user_id: &UserId) -> Result<String> {
     let username = app
          .username(&user_id).await?
          .with_context(|| format!("Incorrect user id: {user_id}"))?;
@@ -61,7 +61,7 @@ pub fn login_fail_page() -> Result<String> {
     LoginFailPage{}.render().context("Could not render login_fail.html")
 }
 
-pub async fn chats_html_response<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl db::DbAccess>) -> Result<Response> {
+pub async fn chats_html_response<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl db::DataAccess>) -> Result<Response> {
     let headers = request.headers();
     let authorization = get_authorization(headers)?;
     let response_string = match authorization {
@@ -71,7 +71,7 @@ pub async fn chats_html_response<T: AsyncRead + Unpin>(request: &Request<T>, app
     Ok(Response::Html{content: response_string, headers: vec![]})
 }
 
-pub async fn chats_html(app: &App<impl db::DbAccess>, user_id: &UserId) -> Result<String> {
+pub async fn chats_html(app: &App<impl db::DataAccess>, user_id: &UserId) -> Result<String> {
     let chats = app.fetch_users_chats(user_id).await?;
     Ok(ChatHtmlElements{ chats }.render().context("Could not render elements/chats.html")?)
 }
@@ -81,7 +81,7 @@ struct ChatSearchParams {
     query: String,
 }
 
-pub async fn chatsearch_html(app: App<impl db::DbAccess>, params: &str) -> Result<Response> {
+pub async fn chatsearch_html(app: App<impl db::DataAccess>, params: &str) -> Result<Response> {
 
     let search_params: ChatSearchParams = match serde_form_data::from_str(params) {
         Ok(res) => res,
@@ -96,7 +96,7 @@ pub async fn chatsearch_html(app: App<impl db::DbAccess>, params: &str) -> Resul
 
 }
 
-pub async fn chat_html_response(app: App<impl db::DbAccess>, chat_id: &str) -> Result<Response> {
+pub async fn chat_html_response(app: App<impl db::DataAccess>, chat_id: &str) -> Result<Response> {
     // TODO authorization first??
     
     let chat_id: UserId = match chat_id.parse() {

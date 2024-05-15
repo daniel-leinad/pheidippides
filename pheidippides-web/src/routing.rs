@@ -18,16 +18,16 @@ use pheidippides_utils::serde::form_data as serde_form_data;
 
 use pheidippides::{db, MessageId, UserId};
 use pheidippides::app::App;
-use pheidippides::db::DbAccess;
+use pheidippides::db::DataAccess;
 
 use crate::sessions;
 
 #[derive(Clone)]
-pub struct RequestHandler<D: db::DbAccess> {
+pub struct RequestHandler<D: db::DataAccess> {
     app: App<D>,
 }
 
-impl<D: db::DbAccess> RequestHandler<D> {
+impl<D: db::DataAccess> RequestHandler<D> {
     pub fn new(db_access: D) -> Self {
         RequestHandler { app: App::new(db_access) }
     }
@@ -52,7 +52,7 @@ impl std::fmt::Display for RequestHandlerError {
 
 impl std::error::Error for RequestHandlerError {}
 
-impl<D: db::DbAccess, T: AsyncRead + Unpin + Sync + Send> web_server::RequestHandler<Request<T>> for RequestHandler<D> {
+impl<D: db::DataAccess, T: AsyncRead + Unpin + Sync + Send> web_server::RequestHandler<Request<T>> for RequestHandler<D> {
     type Error = RequestHandlerError;
 
     fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
@@ -60,7 +60,7 @@ impl<D: db::DbAccess, T: AsyncRead + Unpin + Sync + Send> web_server::RequestHan
     }
 }
 
-pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DbAccess>) -> Result<Response, RequestHandlerError> {
+pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DataAccess>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -126,7 +126,7 @@ fn main_page<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
     }
 }
 
-async fn chat_page<D: DbAccess, T: AsyncRead + Unpin>(
+async fn chat_page<D: DataAccess, T: AsyncRead + Unpin>(
     request: &Request<T>,
     app: App<D>,
     _chat_id: Option<&str>,
@@ -183,7 +183,7 @@ struct AuthorizationParams {
     password: String,
 }
 
-async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DbAccess>) -> Result<Response> {
+async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl db::DataAccess>) -> Result<Response> {
     let content = request.content().await?;
 
     let authorization_params: AuthorizationParams =
@@ -221,7 +221,7 @@ enum SignupError {
     UsernameTaken,
 }
 
-async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl DbAccess>) -> Result<Response> {
+async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<impl DataAccess>) -> Result<Response> {
     let content = request.content().await?;
     let auth_params: AuthorizationParams = match serde_json::from_str(&content) {
         Ok(auth_params) => auth_params,
@@ -251,7 +251,7 @@ struct SendMessageParams {
     message: String,
 }
 
-async fn send_message<D: db::DbAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<D>, receiver: &str) -> Result<Response> {
+async fn send_message<D: db::DataAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: App<D>, receiver: &str) -> Result<Response> {
 
     let receiver: UserId = match receiver.parse() {
         Ok(res) => res,
@@ -292,7 +292,7 @@ struct SubscribeNewMessagesParams {
     last_message_id: Option<String>,
 }
 
-async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl DbAccess>, params: &str) -> Result<Response> {
+async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl DataAccess>, params: &str) -> Result<Response> {
     let user_id = match get_authorization(request.headers())? {
         Some(user_id) => user_id, 
         None => return Ok(Response::BadRequest)

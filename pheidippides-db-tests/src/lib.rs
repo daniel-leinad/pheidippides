@@ -1,7 +1,7 @@
 use std::time::Duration;
 use uuid::uuid;
 
-use pheidippides::db::DbAccess;
+use pheidippides::db::DataAccess;
 use pheidippides::Message;
 
 #[macro_export]
@@ -15,21 +15,21 @@ macro_rules! db_access_tests {
     };
 }
 
-pub async fn it_creates_user(db_access: &impl DbAccess) {
+pub async fn it_creates_user(db_access: &impl DataAccess) {
     let username = "TestUser1";
     let user_id = db_access.create_user(username).await
         .unwrap()
         .unwrap();
     assert_eq!(db_access.username(&user_id).await.unwrap().unwrap(), username);
-    assert_eq!(db_access.user_id(username).await.unwrap().unwrap(), user_id);
+    assert_eq!(db_access.find_user_by_username(username).await.unwrap().unwrap(), user_id);
 }
 
-pub async fn doesnt_fetch_nonexistent_users(db_access: &impl DbAccess) {
+pub async fn doesnt_fetch_nonexistent_users(db_access: &impl DataAccess) {
     assert!(db_access.username(&uuid!("4ec09097-45d5-43a0-bdea-614948bce47e")).await.unwrap().is_none());
-    assert!(db_access.user_id("__NonExistentUserOnlyForTesting").await.unwrap().is_none());
+    assert!(db_access.find_user_by_username("__NonExistentUserOnlyForTesting").await.unwrap().is_none());
 }
 
-pub async fn it_creates_message(db_access: &impl DbAccess) {
+pub async fn it_creates_message(db_access: &impl DataAccess) {
     let sender_id = db_access.create_user("__Test_Sender").await.unwrap().unwrap();
     let receiver_id = db_access.create_user("__Test_Receiver").await.unwrap().unwrap();
     let message = Message{ 
@@ -43,7 +43,7 @@ pub async fn it_creates_message(db_access: &impl DbAccess) {
     db_access.create_message(&message).await.unwrap();
 }
 
-pub async fn fetches_last_messages(db_access: &impl DbAccess) {
+pub async fn fetches_last_messages(db_access: &impl DataAccess) {
     let user_1 = db_access.create_user("__User_1").await.unwrap().unwrap();
     let user_2 = db_access.create_user("__User_2").await.unwrap().unwrap();
     let user_3 = db_access.create_user("__User_3").await.unwrap().unwrap();
@@ -77,7 +77,7 @@ pub async fn fetches_last_messages(db_access: &impl DbAccess) {
     };
 
     let mut last_messages = db_access
-        .last_messages(&user_1, &user_2, None)
+        .fetch_last_messages_in_chat(&user_1, &user_2, None)
         .await
         .unwrap()
         .into_iter();
@@ -89,7 +89,7 @@ pub async fn fetches_last_messages(db_access: &impl DbAccess) {
     assert_eq!(last_messages.next(), None);
 
     let mut last_messages = db_access
-        .last_messages(&user_3, &user_2, None)
+        .fetch_last_messages_in_chat(&user_3, &user_2, None)
         .await
         .unwrap()
         .into_iter();
@@ -99,7 +99,7 @@ pub async fn fetches_last_messages(db_access: &impl DbAccess) {
     assert_eq!(last_messages.next(), None);
 
     let mut last_messages = db_access
-        .last_messages(&user_1, &user_2, Some(starting_id))
+        .fetch_last_messages_in_chat(&user_1, &user_2, Some(starting_id))
         .await
         .unwrap()
         .into_iter();
@@ -110,7 +110,7 @@ pub async fn fetches_last_messages(db_access: &impl DbAccess) {
 
 }
 
-pub async fn fetches_users_messages_since(db_access: &impl DbAccess) {
+pub async fn fetches_users_messages_since(db_access: &impl DataAccess) {
     let user_1 = db_access.create_user("__User_1").await.unwrap().unwrap();
     let user_2 = db_access.create_user("__User_2").await.unwrap().unwrap();
     let user_3 = db_access.create_user("__User_3").await.unwrap().unwrap();
@@ -142,7 +142,7 @@ pub async fn fetches_users_messages_since(db_access: &impl DbAccess) {
     };
 
     let mut users_messages_since = db_access
-        .users_messages_since(&user_1, &starting_id)
+        .fetch_users_messages_since(&user_1, &starting_id)
         .await
         .unwrap()
         .into_iter();

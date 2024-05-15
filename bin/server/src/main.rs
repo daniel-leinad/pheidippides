@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_server(db_access: impl db::DbAccess, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
+async fn run_server(db_access: impl db::DataAccess, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
     let request_handler = routing::RequestHandler::new(db_access.clone());
     web_server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
     Ok(())

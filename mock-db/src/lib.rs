@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
-use pheidippides::{authorization, Chat, Message, MessageId, UserId};
+use pheidippides::{authorization, User, Message, MessageId, UserId};
 use pheidippides::db::*;
 
 struct MessageRecord {
@@ -118,15 +118,15 @@ impl Db {
     }
 }
 
-impl DbAccess for Db {
+impl DataAccess for Db {
     type Error = Error;
 
-    async fn users(&self) -> Result<Vec<(UserId, String)>, Error> {
+    async fn fetch_users(&self) -> Result<Vec<(UserId, String)>, Error> {
         Ok(self.users.lock()?.iter().map(|value| value.clone()).collect())
     }
 
-    async fn chats(&self, user_id: &UserId) -> Result<Vec<Chat>, Error> {
-        let users = self.users().await?;
+    async fn find_users_chats(&self, user_id: &UserId) -> Result<Vec<User>, Error> {
+        let users = self.fetch_users().await?;
         let users = {
             let mut res = HashMap::new();
             for (user_id, username) in users {
@@ -136,9 +136,9 @@ impl DbAccess for Db {
         };
         let res = self.messages.lock()?.iter().rev().filter_map(|msg_record| {
             if &msg_record.from == user_id {
-                Some(Chat::new::<Db>(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
+                Some(User::new::<Db>(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else if &msg_record.to == user_id {
-                Some(Chat::new::<Db>(msg_record.from.clone(), users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
+                Some(User::new::<Db>(msg_record.from.clone(), users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else {
                 None
             }
@@ -151,7 +151,7 @@ impl DbAccess for Db {
         Ok(res)
     }
 
-    async fn last_messages(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
+    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
         let res = self.messages.lock()?.iter()
             .rev()
             .skip_while(|msg_record| match &starting_point {
@@ -186,7 +186,7 @@ impl DbAccess for Db {
         Ok(())
     }
     
-    async fn authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
+    async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
         let res = self.auth.lock()?
             .iter()
             .filter_map(|record| 
@@ -225,7 +225,7 @@ impl DbAccess for Db {
         Ok(Some(user_id))
     }
     
-    async fn users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Self::Error> {
+    async fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Self::Error> {
         let res = self.messages.lock()?
             .iter()
             .skip_while(|message_record| message_record.id != *starting_point)

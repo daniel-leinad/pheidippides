@@ -8,12 +8,12 @@ use argon2::{
     }
 };
 
-use crate::db::{AuthenticationInfo, DbAccess};
+use crate::db::{AuthenticationInfo, DataAccess};
 use crate::UserId;
 
-pub async fn verify_user<D: DbAccess>(user_id: &UserId, password: String, db_access: &D) -> Result<bool> {
+pub async fn verify_user<D: DataAccess>(user_id: &UserId, password: String, db_access: &D) -> Result<bool> {
     let auth_info = match db_access
-        .authentication(user_id).await
+        .fetch_authentication(user_id).await
         .with_context(|| format!("Couldn't fetch authentification for {user_id}"))? {
         Some(auth_info) => auth_info,
         None => return Ok(false),
@@ -28,7 +28,7 @@ pub async fn verify_user<D: DbAccess>(user_id: &UserId, password: String, db_acc
     Ok(res)
 }
 
-pub async fn create_user<D: DbAccess>(user_id: &UserId, password: String, db_access: &D) -> Result<()> {
+pub async fn create_user<D: DataAccess>(user_id: &UserId, password: String, db_access: &D) -> Result<()> {
     let handle = tokio::task::spawn_blocking(move || {
         let salt = SaltString::generate(OsRng);
         let password_hash = match Argon2::default().hash_password(password.as_bytes(), &salt) {

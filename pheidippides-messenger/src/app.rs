@@ -8,14 +8,14 @@ use tokio::sync::broadcast::Sender;
 
 use pheidippides_utils::{async_utils, utils::log_internal_error};
 
-use crate::db::DbAccess;
-use crate::{authorization, Chat, Message, MessageId, UserId};
+use crate::db::DataAccess;
+use crate::{authorization, User, Message, MessageId, UserId};
 
 // TODO better name
 const SUBSCRIPTION_GARBAGE_COLLECTION_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
-pub struct App<D: DbAccess> {
+pub struct App<D: DataAccess> {
     db_access: D,
     new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>,
 }
@@ -24,7 +24,7 @@ pub enum UserCreationError {
     UsernameTaken,
 }
 
-impl<D: DbAccess> App<D> {
+impl<D: DataAccess> App<D> {
     pub fn new(db_access: D) -> Self {
         let new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>  = Arc::new(RwLock::new(HashMap::new()));
 
@@ -80,17 +80,17 @@ impl<D: DbAccess> App<D> {
         }
     }
 
-    pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<Chat>> {
+    pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<User>> {
         
         let chats = self.db_access
-                .chats(&user_id).await
+                .find_users_chats(&user_id).await
                 .with_context(|| format!("Couldn't fetch chats for user {user_id}"))?;
         
         Ok(chats)
     }
 
-    pub async fn fetch_chat_info(&self, user_id: &UserId) -> Result<Option<Chat>> {
-        let chat_info = self.db_access.chat(user_id).await?;
+    pub async fn fetch_chat_info(&self, user_id: &UserId) -> Result<Option<User>> {
+        let chat_info = self.db_access.fetch_user(user_id).await?;
         Ok(chat_info)
     }
 
@@ -146,15 +146,15 @@ impl<D: DbAccess> App<D> {
         }
     }
 
-    pub async fn find_chats(&self, query: &str) -> Result<Vec<Chat>> {
+    pub async fn find_chats(&self, query: &str) -> Result<Vec<User>> {
         let chats = self.db_access
-            .find_chats(query).await
+            .find_users(query).await
             .with_context(|| format!("Could't process chats search request with query: {query}"))?;
         Ok(chats)
     }
 
     pub async fn fetch_last_messages(&self, current_user: &UserId, other_user: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>> {
-        self.db_access.last_messages(current_user, other_user, starting_point).await
+        self.db_access.fetch_last_messages_in_chat(current_user, other_user, starting_point).await
             .with_context(|| format!("Could not fetch last messages.\
                 current_user: {current_user}, other_user: {other_user}, starting_point: {starting_point:?}"))
     }
@@ -176,7 +176,7 @@ impl<D: DbAccess> App<D> {
                 Ok(async_utils::pipe_broadcast(subscription, |v| Some(v)))
             },
             Some(starting_point) => {
-                let previous_messages = self.db_access.users_messages_since(&user_id, &starting_point).await?;
+                let previous_messages = self.db_access.fetch_users_messages_since(&user_id, &starting_point).await?;
                 let (sender, receiver) = mpsc::unbounded_channel();
 
                 let mut sent_messages = HashSet::new();
@@ -196,6 +196,6 @@ impl<D: DbAccess> App<D> {
     }
 
     async fn user_id(&self, username: &str) -> Result<Option<UserId>> {
-        self.db_access.user_id(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
+        self.db_access.find_user_by_username(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
     }
 }
