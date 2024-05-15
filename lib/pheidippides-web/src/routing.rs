@@ -1,66 +1,27 @@
 mod html;
 mod json;
 mod tools;
+mod pages;
+mod actions;
 
 use std::collections::HashMap;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use tokio::io::AsyncRead;
 
-use web_server::{self, EventSourceEvent, Request, Response};
+use web_server::{self, Request, Response};
 
-use pheidippides_utils::async_utils;
 use pheidippides_utils::utils::{
-    CaseInsensitiveString, get_cookies_hashmap, header_set_cookie, log_internal_error
+    CaseInsensitiveString, get_cookies_hashmap, log_internal_error
 };
-use pheidippides_utils::serde::form_data as serde_form_data;
-
-use pheidippides_messenger::{MessageId, UserId};
+use pheidippides_messenger::UserId;
 use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::data_access::DataAccess;
 
+use crate::request_handler::RequestHandlerError;
 use crate::sessions;
 
-#[derive(Clone)]
-pub struct RequestHandler<D: DataAccess> {
-    app: Messenger<D>,
-}
-
-impl<D: DataAccess> RequestHandler<D> {
-    pub fn new(db_access: D) -> Self {
-        RequestHandler { app: Messenger::new(db_access) }
-    }
-}
-
-#[derive(Debug)]
-pub struct RequestHandlerError {
-    inner: anyhow::Error,
-}
-
-impl From<anyhow::Error> for RequestHandlerError {
-    fn from(inner: anyhow::Error) -> Self {
-        RequestHandlerError { inner }
-    }
-}
-
-impl std::fmt::Display for RequestHandlerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
-    }
-}
-
-impl std::error::Error for RequestHandlerError {}
-
-impl<D: DataAccess, T: AsyncRead + Unpin + Sync + Send> web_server::RequestHandler<Request<T>> for RequestHandler<D> {
-    type Error = RequestHandlerError;
-
-    fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = Result<Response, Self::Error>> + Send {
-        handle_request(request, self.app)
-    }
-}
-
-pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response, RequestHandlerError> {
+pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -89,19 +50,19 @@ pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app:
 
     use web_server::Method::*;
     let response = match query {
-        (Get, None, ..) => main_page(request),
-        (Get, Some("login"), None, ..) => authorization_page().await,
-        (Get, Some("signup"), None, ..) => signup_page().await,
-        (Post, Some("signup"), None, ..) => signup(request, app).await,
-        (Get, Some("logout"), None, ..) => logout(request),
-        (Post, Some("authorize"), None, ..) => authorization(request, app).await,
-        (Get, Some("chat"), chat_id, None, ..) => chat_page(request, app, chat_id).await,
-        (Post, Some("message"), Some(receiver), None, ..) => send_message(request, app, receiver).await,
+        (Get, None, ..) => pages::main(request),
+        (Get, Some("login"), None, ..) => pages::authorization().await,
+        (Get, Some("signup"), None, ..) => pages::signup().await,
+        (Get, Some("chat"), chat_id, None, ..) => pages::chat(request, app, chat_id).await,
+        (Post, Some("signup"), None, ..) => actions::signup(request, app).await,
+        (Get, Some("logout"), None, ..) => actions::logout(request),
+        (Post, Some("authorize"), None, ..) => actions::authorize(request, app).await,
+        (Post, Some("message"), Some(receiver), None, ..) => actions::send_message(request, app, receiver).await,
+        (Get, Some("subscribe"), Some("new_messages"), None, ..) => actions::subscribe_new_messages(request, app, params).await,
         (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, app).await,
         (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(app, params).await,
         (Get, Some("html"), Some("chat"), Some(chat_id), ..) => html::chat_html_response(app, chat_id).await,
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
-        (Get, Some("subscribe"), Some("new_messages"), None, ..) => subscribe_new_messages(request, app, params).await,
         (Get, Some("tools"), Some("event_source"), None, ..) => tools::event_source(request),
         (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
         _ => Ok(Response::BadRequest),
@@ -113,170 +74,6 @@ pub async fn handle_request<T: AsyncRead + Unpin>(request: &mut Request<T>, app:
     });
 
     Ok(response)
-
-    // request.respond(response)
-}
-
-fn main_page<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
-    let headers = request.headers();
-
-    match get_authorization(headers)? {
-        Some(_) => Ok(Response::Redirect{location: "/chat".into(), headers: Vec::new()}),
-        None => Ok(unauthorized_redirect()),
-    }
-}
-
-async fn chat_page<D: DataAccess, T: AsyncRead + Unpin>(
-    request: &Request<T>,
-    app: Messenger<D>,
-    _chat_id: Option<&str>,
-) -> Result<Response> {
-    
-    let headers = request.headers();
-
-    let user_id = match get_authorization(headers)? {
-        Some(user_id) => user_id,
-        None => return Ok(unauthorized_redirect()),
-    };
-
-    let chat_page = html::chat_page(&app, &user_id).await?;
-
-    Ok(Response::Html {
-        content: chat_page,
-        headers: Vec::new(),
-    })
-}
-
-async fn authorization_page() -> Result<Response> {
-    let content = html::login_page()?;
-    Ok(Response::Html {
-        content,
-        headers: Vec::new(),
-    })
-}
-
-async fn signup_page() -> Result<Response> {
-    let content = html::signup_page()?;
-    let headers = vec![];
-    Ok(Response::Html { content , headers })
-}
-
-fn logout<T: AsyncRead + Unpin>(request: &Request<T>) -> Result<Response> {
-    let headers = request.headers();
-    let cookies = match get_cookies_hashmap(headers) {
-        Ok(cookies) => cookies,
-        Err(_) => return Ok(Response::BadRequest),
-    };
-
-    let session_id = match cookies.get(sessions::SESSION_ID_COOKIE) {
-        Some(session_id) => session_id,
-        None => return Ok(unauthorized_redirect()),
-    };
-
-    sessions::remove_session_info(&session_id)?;
-    Ok(unauthorized_redirect())
-}
-
-#[derive(Deserialize)]
-struct AuthorizationParams {
-    login: String,
-    password: String,
-}
-
-async fn authorization<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response> {
-    let content = request.content().await?;
-
-    let authorization_params: AuthorizationParams =
-        match serde_form_data::from_str(&content) {
-            Ok(authorization_params) => authorization_params,
-            Err(_) => {
-                //TODO handle this case more precisely for client?
-                return Ok(Response::BadRequest);
-            }
-        };
-    
-    let user_verification = app.verify_user(&authorization_params.login, authorization_params.password).await?;
-
-    match user_verification {
-        Some(user_id) => {
-            let session_id = sessions::generate_session_id();
-            sessions::update_session_info(session_id.clone(), sessions::SessionInfo { user_id })?;
-            let location = "/chat".into();
-            let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
-
-            Ok(Response::Redirect { location , headers })
-        }
-        None => failed_login_response()
-    }
-}
-
-#[derive(Serialize)]
-struct SignupResponse {
-    success: bool,
-    errors: Vec<SignupError>,
-}
-
-#[derive(Serialize)]
-enum SignupError {
-    UsernameTaken,
-}
-
-async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response> {
-    let content = request.content().await?;
-    let auth_params: AuthorizationParams = match serde_json::from_str(&content) {
-        Ok(auth_params) => auth_params,
-        Err(_) => {
-            //TODO handle this case more precisely for client?
-            return Ok(Response::BadRequest);
-        }
-    };
-
-    match app.create_user(&auth_params.login, auth_params.password).await? {
-        Some(user_id) => {
-            let signup_response = serde_json::json!(SignupResponse{ success: true, errors: vec![] });
-            let session_id = sessions::generate_session_id();
-            let headers = vec![header_set_cookie(sessions::SESSION_ID_COOKIE, &session_id)];
-            sessions::update_session_info(session_id, sessions::SessionInfo{ user_id })?;
-            Ok(Response::Json{ content: signup_response.to_string(), headers })
-        },
-        None => {
-            let signup_response = SignupResponse{ success: false, errors: vec![SignupError::UsernameTaken] };
-            Ok(Response::Json{content: serde_json::json!(signup_response).to_string(), headers: vec![]})
-        },
-    }
-}
-
-#[derive(Deserialize)]
-struct SendMessageParams {
-    message: String,
-}
-
-async fn send_message<D: DataAccess, T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<D>, receiver: &str) -> Result<Response> {
-
-    let receiver: UserId = match receiver.parse() {
-        Ok(res) => res,
-        Err(_) => return Ok(Response::BadRequest),
-    };
-
-    let headers = request.headers();
-    let authorization = get_authorization(headers)?;
-
-    let user_id = match authorization {
-        Some(user_id) => user_id,
-        None => return Ok(unauthorized_redirect()),
-    };
-
-    let params: SendMessageParams = match serde_json::from_str(&request.content().await?) {
-        Ok(params) => params,
-        Err(_) => {
-            //TODO handle this case more precisely for client?
-            return Ok(Response::BadRequest);
-        },
-    };
-
-    app.send_message(params.message, user_id, receiver).await?;
-
-    Ok(Response::Html { content: "ok.".to_owned(), headers: Vec::new() })
 }
 
 fn failed_login_response() -> Result<Response> {
@@ -285,59 +82,6 @@ fn failed_login_response() -> Result<Response> {
         content,
         headers: Vec::new(),
     })
-}
-
-#[derive(Deserialize)]
-struct SubscribeNewMessagesParams {
-    last_message_id: Option<String>,
-}
-
-async fn subscribe_new_messages<T: AsyncRead + Unpin>(request: &Request<T>, app: Messenger<impl DataAccess>, params: &str) -> Result<Response> {
-    let user_id = match get_authorization(request.headers())? {
-        Some(user_id) => user_id, 
-        None => return Ok(Response::BadRequest)
-    };
-
-    let subscribe_new_messages_params: SubscribeNewMessagesParams = match serde_form_data::from_str(params) {
-        Ok(res) => res,
-        Err(_) => return Ok(Response::BadRequest),
-    };
-
-    let last_message_id_params = match subscribe_new_messages_params.last_message_id {
-        Some(s) => {
-            match s.parse() {
-                Ok(res) => Some(res),
-                Err(_) => return Ok(Response::BadRequest),
-            }
-        },
-        None => None,
-    };
-
-    let last_message_id_header: Option<MessageId> = match request.headers().get(&CaseInsensitiveString::from("Last-Event-ID")) {
-        Some(header_value) => {
-            match header_value.parse() {
-                Ok(last_event_id) => Some(last_event_id),
-                Err(_) => return Ok(Response::BadRequest),
-            }
-        },
-        None => None,
-    };
-
-    let starting_point = last_message_id_header.or(last_message_id_params);
-
-    let subscription = app.subscribe_to_new_messages(user_id, starting_point).await?;
-
-    let stream = async_utils::pipe_unbounded_channel(
-        subscription, 
-        |message| {
-            Some(EventSourceEvent { 
-                data: serde_json::json!(message).to_string(),
-                id: message.id.to_string(), 
-                event: None,
-            })
-    });
-
-    Ok(Response::EventSource { retry: None, stream })
 }
 
 fn unauthorized_redirect() -> Response {

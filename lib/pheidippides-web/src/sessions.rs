@@ -9,13 +9,12 @@ use pheidippides_messenger::UserId;
 pub type SessionId = String;
 
 pub const SESSION_ID_COOKIE: &str = "_pheidippides_sid";
+pub static SESSION_INFO: Lazy<RwLock<HashMap<SessionId, SessionInfo>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Clone)]
 pub struct SessionInfo {
     pub user_id: UserId,
 }
-
-pub static SESSION_INFO: Lazy<RwLock<HashMap<SessionId, SessionInfo>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub fn generate_session_id() -> SessionId {
     uuid::Uuid::new_v4().into()

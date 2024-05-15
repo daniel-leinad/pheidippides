@@ -24,6 +24,7 @@ impl User {
     }
 }
 
+// TODO serde logic does not belong here (also remove serde form dependencies)
 #[derive(Serialize, Clone, PartialEq, Debug)]
 pub struct Message {
     #[serde(serialize_with = "pheidippides_utils::serde::serialize_uuid")]
