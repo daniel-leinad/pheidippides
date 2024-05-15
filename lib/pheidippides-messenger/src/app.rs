@@ -11,8 +11,7 @@ use pheidippides_utils::{async_utils, utils::log_internal_error};
 use crate::db::DataAccess;
 use crate::{authorization, User, Message, MessageId, UserId};
 
-// TODO better name
-const SUBSCRIPTION_GARBAGE_COLLECTION_INTERVAL: Duration = Duration::from_secs(5);
+const SUBSCRIPTIONS_CLEANUP_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub struct App<D: DataAccess> {
@@ -28,16 +27,16 @@ impl<D: DataAccess> App<D> {
     pub fn new(db_access: D) -> Self {
         let new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>  = Arc::new(RwLock::new(HashMap::new()));
 
-        Self::spawn_subscription_garbage_collector(new_messages_subscriptions.clone());
+        Self::spawn_subscription_cleanup_job(new_messages_subscriptions.clone());
         
         App { db_access, new_messages_subscriptions }
     }
 
-    fn spawn_subscription_garbage_collector(new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>) {
+    fn spawn_subscription_cleanup_job(new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>) {
         // Periodically removes unused subscriptions
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(SUBSCRIPTION_GARBAGE_COLLECTION_INTERVAL).await;
+                tokio::time::sleep(SUBSCRIPTIONS_CLEANUP_INTERVAL).await;
                 match new_messages_subscriptions.write() {
                     Ok(mut write_lock) => {
                         write_lock.retain(|_, sender| sender.receiver_count() > 0);
@@ -58,13 +57,13 @@ impl<D: DataAccess> App<D> {
         };
 
         authorization::create_user(&user_id, password, &self.db_access).await.with_context(
-            || format!("Authoriazation error: couldn't create user {}", login))?;
+            || format!("Authorization error: couldn't create user {}", login))?;
         
         Ok(Some(user_id))
     }
 
     pub async fn verify_user(&self, username: &str, password: String) -> Result<Option<UserId>> {
-        let user_id = match self.user_id(username).await? {
+        let user_id = match self.find_user_by_username(username).await? {
             Some(user_id) => user_id,
             None => return Ok(None),
         };
@@ -89,15 +88,15 @@ impl<D: DataAccess> App<D> {
         Ok(chats)
     }
 
-    pub async fn fetch_chat_info(&self, user_id: &UserId) -> Result<Option<User>> {
-        let chat_info = self.db_access.fetch_user(user_id).await?;
-        Ok(chat_info)
+    pub async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>> {
+        let user = self.db_access
+            .fetch_user(user_id).await
+            .with_context(|| format!("Couldn't fetch user with id {user_id}"))?;
+        Ok(user)
     }
 
     pub async fn username(&self, user_id: &UserId) -> Result<Option<String>> {
-        let user = self.db_access
-                .fetch_user(user_id).await
-                .with_context(|| format!("Couldn't fetch username for id {user_id}"))?;
+        let user = self.fetch_user(user_id).await?;
         Ok(user.map(|user| user.username))
     }
 
@@ -149,11 +148,11 @@ impl<D: DataAccess> App<D> {
         }
     }
 
-    pub async fn find_chats(&self, query: &str) -> Result<Vec<User>> {
-        let chats = self.db_access
-            .find_users_by_substring(query).await
-            .with_context(|| format!("Could't process chats search request with query: {query}"))?;
-        Ok(chats)
+    pub async fn find_users_by_substring(&self, substring: &str) -> Result<Vec<User>> {
+        let users = self.db_access
+            .find_users_by_substring(substring).await
+            .with_context(|| format!("Could't process users search request by substring: {substring}"))?;
+        Ok(users)
     }
 
     pub async fn fetch_last_messages(&self, current_user: &UserId, other_user: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>> {
@@ -198,7 +197,7 @@ impl<D: DataAccess> App<D> {
         }
     }
 
-    async fn user_id(&self, username: &str) -> Result<Option<UserId>> {
+    async fn find_user_by_username(&self, username: &str) -> Result<Option<UserId>> {
         self.db_access.find_user_by_username(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
     }
 }

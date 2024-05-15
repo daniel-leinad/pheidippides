@@ -88,7 +88,7 @@ pub async fn chatsearch_html(app: App<impl db::DataAccess>, params: &str) -> Res
         Err(_) => return Ok(Response::Empty),
     };
 
-    let chats = app.find_chats(&search_params.query).await?;
+    let chats = app.find_users_by_substring(&search_params.query).await?;
 
     let chats_html = ChatHtmlElements{chats}.render()?;
 
@@ -104,7 +104,7 @@ pub async fn chat_html_response(app: App<impl db::DataAccess>, chat_id: &str) ->
         Err(_) => return Ok(Response::BadRequest),
     };
 
-    let chat_info = app.fetch_chat_info(&chat_id).await?;
+    let chat_info = app.fetch_user(&chat_id).await?;
 
     let res = ChatHtmlElements{chats: chat_info.into_iter().collect()}.render()?;
 
