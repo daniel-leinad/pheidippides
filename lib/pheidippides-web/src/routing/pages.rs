@@ -5,14 +5,8 @@ use web_server::{Request, Response};
 use crate::routing;
 use crate::routing::html;
 
-pub fn main<T: AsyncRead + Unpin>(request: &Request<T>) -> anyhow::Result<Response> {
-    let headers = request.headers();
-
-    // TODO unnecessary authorization check, redirect straight to chat
-    match routing::get_authorization(headers)? {
-        Some(_) => Ok(Response::Redirect{location: "/chat".into(), headers: Vec::new()}),
-        None => Ok(routing::unauthorized_redirect()),
-    }
+pub fn main() -> anyhow::Result<Response> {
+    Ok(Response::Redirect{location: "/chat".into(), headers: Vec::new()})
 }
 
 pub async fn chat<D: DataAccess, T: AsyncRead + Unpin>(

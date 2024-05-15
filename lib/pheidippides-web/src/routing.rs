@@ -50,7 +50,7 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
 
     use web_server::Method::*;
     let response = match query {
-        (Get, None, ..) => pages::main(request),
+        (Get, None, ..) => pages::main(),
         (Get, Some("login"), None, ..) => pages::authorization().await,
         (Get, Some("signup"), None, ..) => pages::signup().await,
         (Get, Some("chat"), chat_id, None, ..) => pages::chat(request, app, chat_id).await,
