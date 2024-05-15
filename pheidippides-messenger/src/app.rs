@@ -151,7 +151,7 @@ impl<D: DataAccess> App<D> {
 
     pub async fn find_chats(&self, query: &str) -> Result<Vec<User>> {
         let chats = self.db_access
-            .find_users(query).await
+            .find_users_by_substring(query).await
             .with_context(|| format!("Could't process chats search request with query: {query}"))?;
         Ok(chats)
     }

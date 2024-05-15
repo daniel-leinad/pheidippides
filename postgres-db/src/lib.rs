@@ -288,7 +288,7 @@ impl DataAccess for Db {
         Ok(res.map(|row| row.get(0))) 
     }
     
-    async fn find_users(&self, search_query: &str) -> Result<Vec<User>, Error> {
+    async fn find_users_by_substring(&self, search_query: &str) -> Result<Vec<User>, Error> {
         let mut conn = self.pool.acquire().await?;
         let res = conn.fetch_all(query(r#"
                 select user_id, username from users where lower(username) like $1
