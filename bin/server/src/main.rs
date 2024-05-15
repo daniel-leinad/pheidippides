@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
-use pheidippides::db;
+use pheidippides_messenger::db;
 use pheidippides_web::routing;
 
 use mock_db;

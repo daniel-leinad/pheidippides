@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+pheidippides-messenger = { path= "../pheidippides-messenger" }
+
 anyhow = "1.0.83"
 chrono = "0.4.38"
-pheidippides = { path= "../pheidippides-messenger" }
 sqlx = { version = "0.7.4", features = ["chrono", "postgres", "runtime-tokio", "uuid"] }
 thiserror = "1.0.60"
 tokio = "1.37.0"
@@ -14,5 +15,5 @@ tokio-util = "0.7.11"
 uuid = "1.8.0"
 
 [dev-dependencies]
-tokio = "1.37.0"
 pheidippides-db-tests = { path = "../pheidippides-db-tests" }
+tokio = "1.37.0"

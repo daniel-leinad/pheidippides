@@ -6,9 +6,9 @@ use pheidippides_utils::serde::form_data as serde_form_data;
 
 use web_server::{Request, Response};
 
-use pheidippides::db::{self};
-use pheidippides::app::App;
-use pheidippides::{Message, MessageId, UserId};
+use pheidippides_messenger::db::{self};
+use pheidippides_messenger::app::App;
+use pheidippides_messenger::{Message, MessageId, UserId};
 
 use crate::routing::get_authorization;
 

@@ -1,7 +1,7 @@
 #![feature(assert_matches)]
 use std::assert_matches::assert_matches;
 
-use pheidippides::{app, Message};
+use pheidippides_messenger::{app, Message};
 use mock_db;
 
 #[tokio::test]

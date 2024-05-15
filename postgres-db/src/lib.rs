@@ -9,9 +9,9 @@ use tokio::task::JoinError;
 use tokio_util::sync::CancellationToken;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{Executor, PgPool, query, Row};
-use pheidippides::{User, Message, MessageId, UserId};
 
-use pheidippides::db::{
+use pheidippides_messenger::{User, Message, MessageId, UserId};
+use pheidippides_messenger::db::{
     AuthenticationInfo, DataAccess, MESSAGE_LOAD_BUF_SIZE
 };
 
@@ -83,7 +83,7 @@ pub enum Error {
     #[error("Postgres error: {0}")]
     PgError(#[from] sqlx::Error),
     #[error("Auth info parsing error: {0}")]
-    AuthInfoParsingError(#[from] pheidippides::db::AuthenticationInfoParsingError),
+    AuthInfoParsingError(#[from] pheidippides_messenger::db::AuthenticationInfoParsingError),
 }
 
 impl DataAccess for Db {
@@ -317,7 +317,7 @@ impl DataAccess for Db {
         }
     }
 
-    async fn update_authentication(&self, user_id: &UserId, auth_info: pheidippides::db::AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
+    async fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
         let mut transaction = self.pool.begin().await?;
         transaction.execute(query("lock table auth in exclusive mode")).await?;
         let old_auth = transaction.fetch_optional(query(

@@ -16,9 +16,9 @@ use pheidippides_utils::utils::{
 };
 use pheidippides_utils::serde::form_data as serde_form_data;
 
-use pheidippides::{db, MessageId, UserId};
-use pheidippides::app::App;
-use pheidippides::db::DataAccess;
+use pheidippides_messenger::{db, MessageId, UserId};
+use pheidippides_messenger::app::App;
+use pheidippides_messenger::db::DataAccess;
 
 use crate::sessions;
 

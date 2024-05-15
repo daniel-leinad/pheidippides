@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dev-dependencies]
-pheidippides = { path = "../pheidippides-messenger" }
+pheidippides-messenger = { path = "../pheidippides-messenger" }
 pheidippides-web = { path = "../pheidippides-web" }
 web-server = { path = "../web-server" }
 mock-db = { path = "../mock-db" }

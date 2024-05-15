@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use once_cell::sync::Lazy;
 
-use pheidippides::UserId;
+use pheidippides_messenger::UserId;
 
 pub type SessionId = String;
 

@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+pheidippides-messenger = { path= "../pheidippides-messenger" }
+
 chrono = "0.4.38"
 password-hash = "0.5.0"
-pheidippides = { path= "../pheidippides-messenger" }
 uuid = "1.8.0"
 
 [dev-dependencies]
-tokio = "1.37.0"
 pheidippides-db-tests = { path = "../pheidippides-db-tests" }
+
+tokio = "1.37.0"

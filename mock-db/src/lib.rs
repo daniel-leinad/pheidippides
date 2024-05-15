@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
-use pheidippides::{authorization, User, Message, MessageId, UserId};
-use pheidippides::db::*;
+use pheidippides_messenger::{authorization, User, Message, MessageId, UserId};
+use pheidippides_messenger::db::*;
 
 struct MessageRecord {
     id: MessageId,
