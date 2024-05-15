@@ -8,7 +8,7 @@ use tokio::sync::broadcast::Sender;
 
 use pheidippides_utils::{async_utils, utils::log_internal_error};
 
-use crate::db::DataAccess;
+use crate::data_access::DataAccess;
 use crate::{authorization, User, Message, MessageId, UserId};
 
 const SUBSCRIPTIONS_CLEANUP_INTERVAL: Duration = Duration::from_secs(5);

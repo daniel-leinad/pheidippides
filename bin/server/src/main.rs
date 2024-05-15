@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
-use pheidippides_messenger::db;
+use pheidippides_messenger::data_access;
 use pheidippides_web::routing;
 
 use mock_db;
@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_server(db_access: impl db::DataAccess, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
+async fn run_server(db_access: impl data_access::DataAccess, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
     let request_handler = routing::RequestHandler::new(db_access.clone());
     web_server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
     Ok(())

@@ -6,7 +6,7 @@ use pheidippides_utils::serde::form_data as serde_form_data;
 
 use web_server::{Request, Response};
 
-use pheidippides_messenger::db::{self};
+use pheidippides_messenger::data_access::{self};
 use pheidippides_messenger::app::App;
 use pheidippides_messenger::{Message, MessageId, UserId};
 
@@ -29,7 +29,7 @@ enum MessageResponseError {
     Unauthorized,
 }
 
-pub async fn messages_json<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl db::DataAccess>, chat_id: &str, params: &str) -> Result<Response> {
+pub async fn messages_json<T: AsyncRead + Unpin>(request: &Request<T>, app: App<impl data_access::DataAccess>, chat_id: &str, params: &str) -> Result<Response> {
 
     let chat_id: UserId = match chat_id.parse() {
         Ok(chat_id) => chat_id,

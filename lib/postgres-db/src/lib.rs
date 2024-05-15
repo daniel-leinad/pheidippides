@@ -11,7 +11,7 @@ use sqlx::postgres::PgConnectOptions;
 use sqlx::{Executor, PgPool, query, Row};
 
 use pheidippides_messenger::{User, Message, MessageId, UserId};
-use pheidippides_messenger::db::{
+use pheidippides_messenger::data_access::{
     AuthenticationInfo, DataAccess, MESSAGE_LOAD_BUF_SIZE
 };
 
@@ -83,7 +83,7 @@ pub enum Error {
     #[error("Postgres error: {0}")]
     PgError(#[from] sqlx::Error),
     #[error("Auth info parsing error: {0}")]
-    AuthInfoParsingError(#[from] pheidippides_messenger::db::AuthenticationInfoParsingError),
+    AuthInfoParsingError(#[from] pheidippides_messenger::data_access::AuthenticationInfoParsingError),
 }
 
 impl DataAccess for Db {

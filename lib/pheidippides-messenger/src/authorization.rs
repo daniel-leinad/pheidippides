@@ -8,7 +8,7 @@ use argon2::{
     }
 };
 
-use crate::db::{AuthenticationInfo, DataAccess};
+use crate::data_access::{AuthenticationInfo, DataAccess};
 use crate::UserId;
 
 pub async fn verify_user<D: DataAccess>(user_id: &UserId, password: String, db_access: &D) -> Result<bool> {

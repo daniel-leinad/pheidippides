@@ -1,10 +1,10 @@
 use uuid::Uuid;
 use serde::Serialize;
 use chrono::DateTime;
-use crate::db::DataAccess;
+use crate::data_access::DataAccess;
 
 pub mod app;
-pub mod db;
+pub mod data_access;
 pub mod authorization;
 
 pub type MessageId = Uuid;

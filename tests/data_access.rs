@@ -1,7 +1,7 @@
 use std::time::Duration;
 use uuid::uuid;
 
-use pheidippides_messenger::db::DataAccess;
+use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_messenger::Message;
 
 #[macro_export]
