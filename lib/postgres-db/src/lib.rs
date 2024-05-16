@@ -14,7 +14,7 @@ use pheidippides_messenger::{Message, MessageId, User, UserId};
 use pheidippides_messenger::data_access::{
     DataAccess, MESSAGE_LOAD_BUF_SIZE
 };
-use pheidippides_messenger::authorization::{AuthenticationInfo, AuthStorage};
+use pheidippides_auth::{AuthenticationInfo, AuthStorage};
 
 pub const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 const DB_VERSION: i64 = 2;
@@ -84,7 +84,7 @@ pub enum Error {
     #[error("Postgres error: {0}")]
     PgError(#[from] sqlx::Error),
     #[error("Auth info parsing error: {0}")]
-    AuthInfoParsingError(#[from] pheidippides_messenger::authorization::AuthenticationInfoParsingError),
+    AuthInfoParsingError(#[from] pheidippides_auth::AuthenticationInfoParsingError),
 }
 
 impl DataAccess for Db {

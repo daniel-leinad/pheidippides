@@ -4,9 +4,9 @@ use tokio_util::sync::CancellationToken;
 
 use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_web::request_handler;
+use pheidippides_auth::{AuthServiceImpl, AuthStorage};
 
 use mock_db;
-use pheidippides_messenger::authorization::AuthStorage;
 use postgres_db;
 
 #[derive(Parser, Debug)]
@@ -50,7 +50,8 @@ async fn main() -> Result<()> {
 }
 
 async fn run_server<T: DataAccess + AuthStorage>(data_access: T, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
-    let request_handler = request_handler::RequestHandler::new(data_access.clone(), data_access);
+    let auth_service = AuthServiceImpl::new(data_access.clone());
+    let request_handler = request_handler::RequestHandler::new(data_access, auth_service);
     web_server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
     Ok(())
 }

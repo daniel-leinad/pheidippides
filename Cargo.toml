@@ -4,11 +4,12 @@ members = [
     "lib/pheidippides-messenger",
     "lib/pheidippides-utils",
     "lib/pheidippides-web",
+    "lib/pheidippides-auth",
     "lib/web-server",
     "lib/postgres-db",
     "lib/mock-db",
     "tests",
     
     "bin/server",
-    "bin/migrate",
+    "bin/migrate", "lib/pheidippides-auth",
 ]

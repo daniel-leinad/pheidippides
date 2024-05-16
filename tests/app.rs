@@ -5,6 +5,7 @@ use pheidippides_messenger::Message;
 use pheidippides_messenger::messenger::Messenger;
 use mock_db;
 use mock_db::Db;
+use pheidippides_auth::AuthServiceImpl;
 
 #[tokio::test]
 async fn subscribes_to_new_messages_without_starting_point() {
@@ -130,8 +131,9 @@ async fn authorization_ignores_case() {
     assert!(app.verify_user("user1", "user1".to_owned()).await.unwrap().is_none());
 }
 
-async fn make_app() -> Messenger<Db, Db> {
+async fn make_app() -> Messenger<Db, AuthServiceImpl<Db>> {
     let db_access = Db::empty();
-    let app = Messenger::new(db_access.clone(), db_access);
+    let auth_service = AuthServiceImpl::new(db_access.clone());
+    let app = Messenger::new(db_access, auth_service);
     app
 }

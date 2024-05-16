@@ -5,12 +5,12 @@ use pheidippides_utils::utils::log_internal_error;
 use crate::data_access::DataAccess;
 use crate::{Message, MessageId, User, UserId};
 use crate::subscriptions_handler::SubscriptionsHandler;
-use crate::authorization::{AuthService, AuthStorage};
+use crate::authorization::AuthService;
 
 #[derive(Clone)]
-pub struct Messenger<D, T> {
+pub struct Messenger<D, A> {
     data_access: D,
-    authorization_service: AuthService<T>,
+    authorization_service: A,
     subscriptions_handler: SubscriptionsHandler<D>,
 }
 
@@ -19,9 +19,8 @@ pub enum UserCreationError {
 }
 
 impl<D: DataAccess, A> Messenger<D, A> {
-    pub fn new(data_access: D, auth_storage: A) -> Self {
+    pub fn new(data_access: D, authorization_service: A) -> Self {
         let subscriptions_handler = SubscriptionsHandler::new(data_access.clone());
-        let authorization_service = AuthService::new(auth_storage);
         Messenger { data_access, authorization_service, subscriptions_handler }
     }
 
@@ -89,7 +88,7 @@ impl<D: DataAccess, A> Messenger<D, A> {
     }
 }
 
-impl<D: DataAccess, A: AuthStorage> Messenger<D, A> {
+impl<D: DataAccess, A: AuthService> Messenger<D, A> {
     pub async fn verify_user(&self, username: &str, password: String) -> Result<Option<UserId>> {
         let user_id = match self.find_user_by_username(username).await? {
             Some(user_id) => user_id,

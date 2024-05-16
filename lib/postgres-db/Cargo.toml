@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 pheidippides-messenger = { path= "../pheidippides-messenger" }
+pheidippides-auth = { path = "../pheidippides-auth" }
 
 anyhow = "1.0.83"
 chrono = "0.4.38"

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use tokio::io::AsyncRead;
-use pheidippides_messenger::authorization::AuthStorage;
+use pheidippides_messenger::authorization::AuthService;
 
 use web_server::{self, Request, Response};
 
@@ -22,7 +22,7 @@ use pheidippides_messenger::data_access::DataAccess;
 use crate::request_handler::RequestHandlerError;
 use crate::sessions;
 
-pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthStorage>) -> Result<Response, RequestHandlerError> {
+pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthService>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {

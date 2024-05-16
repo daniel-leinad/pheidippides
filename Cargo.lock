@@ -27,7 +27,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "version_check",
- "zerocopy",
+ "zerocopy 0.7.32",
 ]
 
 [[package]]
@@ -897,6 +897,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "password-hash",
+ "pheidippides-auth",
  "pheidippides-messenger",
  "uuid",
 ]
@@ -1013,7 +1014,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346f04948ba92c43e8469c1ee6736c7563d71012b17d40745260fe106aac2166"
 dependencies = [
  "base64ct",
- "rand_core",
+ "rand_core 0.6.4",
  "subtle",
 ]
 
@@ -1039,15 +1040,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
-name = "pheidippides-messenger"
+name = "pheidippides-auth"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "argon2",
- "chrono",
  "password-hash",
+ "pheidippides-messenger",
+ "rand_core 0.9.0-alpha.1",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "pheidippides-messenger"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
  "pheidippides-utils",
- "rand_core",
+ "rand_core 0.6.4",
  "thiserror",
  "tokio",
  "uuid",
@@ -1127,6 +1139,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "pheidippides-auth",
  "pheidippides-messenger",
  "sqlx",
  "thiserror",
@@ -1167,7 +1180,7 @@ checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha",
- "rand_core",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -1177,7 +1190,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
 dependencies = [
  "ppv-lite86",
- "rand_core",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -1187,6 +1200,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.9.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc89dffba8377c5ec847d12bb41492bda235dba31a25e8b695cd0fe6589eb8c9"
+dependencies = [
+ "zerocopy 0.8.0-alpha.6",
 ]
 
 [[package]]
@@ -1211,7 +1233,7 @@ dependencies = [
  "num-traits",
  "pkcs1",
  "pkcs8",
- "rand_core",
+ "rand_core 0.6.4",
  "signature",
  "spki",
  "subtle",
@@ -1287,6 +1309,7 @@ dependencies = [
  "anyhow",
  "clap",
  "mock-db",
+ "pheidippides-auth",
  "pheidippides-messenger",
  "pheidippides-web",
  "postgres-db",
@@ -1333,7 +1356,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest",
- "rand_core",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -1662,6 +1685,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "mock-db",
+ "pheidippides-auth",
  "pheidippides-messenger",
  "pheidippides-web",
  "postgres-db",
@@ -2139,7 +2163,16 @@ version = "0.7.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74d4d3961e53fa4c9a25a8637fc2bfaf2595b3d3ae34875568a5cf64787716be"
 dependencies = [
- "zerocopy-derive",
+ "zerocopy-derive 0.7.32",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.0-alpha.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db678a6ee512bd06adf35c35be471cae2f9c82a5aed2b5d15e03628c98bddd57"
+dependencies = [
+ "zerocopy-derive 0.8.0-alpha.6",
 ]
 
 [[package]]
@@ -2147,6 +2180,17 @@ name = "zerocopy-derive"
 version = "0.7.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.55",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.8.0-alpha.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "201585ea96d37ee69f2ac769925ca57160cef31acb137c16f38b02b76f4c1e62"
 dependencies = [
  "proc-macro2",
  "quote",

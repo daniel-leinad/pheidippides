@@ -1,9 +1,10 @@
 use tokio::io::AsyncRead;
+use serde::{Deserialize, Serialize};
+
 use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_messenger::messenger::Messenger;
-use serde::{Deserialize, Serialize};
 use pheidippides_messenger::{MessageId, UserId};
-use pheidippides_messenger::authorization::AuthStorage;
+use pheidippides_messenger::authorization::AuthService;
 use pheidippides_utils::async_utils;
 use pheidippides_utils::serde::form_data;
 use pheidippides_utils::utils::{CaseInsensitiveString, get_cookies_hashmap, header_set_cookie};
@@ -27,7 +28,7 @@ pub fn logout<T: AsyncRead + Unpin>(request: &Request<T>) -> anyhow::Result<Resp
     Ok(routing::unauthorized_redirect())
 }
 
-pub async fn authorize<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthStorage>) -> anyhow::Result<Response> {
+pub async fn authorize<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthService>) -> anyhow::Result<Response> {
     let content = request.content().await?;
 
     #[derive(Deserialize)]
@@ -60,7 +61,7 @@ pub async fn authorize<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Mess
     }
 }
 
-pub async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthStorage>) -> anyhow::Result<Response> {
+pub async fn signup<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthService>) -> anyhow::Result<Response> {
     let content = request.content().await?;
 
     #[derive(Deserialize)]
