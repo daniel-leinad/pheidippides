@@ -90,7 +90,7 @@ pub async fn messages_json<A, T: AsyncRead + Unpin>(request: &Request<T>, app: M
     };
 
     let messages: Vec<_> = app
-        .fetch_last_messages(&user_id, &chat_id, starting_from).await?
+        .fetch_last_messages(&user_id, &chat_id, starting_from.as_ref()).await?
         .into_iter()
         .map(|message| message.into())
         .rev()

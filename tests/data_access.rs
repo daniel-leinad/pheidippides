@@ -99,7 +99,7 @@ pub async fn fetches_last_messages(db_access: &impl DataAccess) {
     assert_eq!(last_messages.next(), None);
 
     let mut last_messages = db_access
-        .fetch_last_messages_in_chat(&user_1, &user_2, Some(starting_id))
+        .fetch_last_messages_in_chat(&user_1, &user_2, Some(&starting_id))
         .await
         .unwrap()
         .into_iter();

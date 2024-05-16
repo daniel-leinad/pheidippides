@@ -211,7 +211,7 @@ impl DataAccess for Db {
         Ok(res)
     }
 
-    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Self::Error> {
+    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> Result<Vec<Message>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let mut query_builder = sqlx::QueryBuilder::new("");
         query_builder.push(r#"

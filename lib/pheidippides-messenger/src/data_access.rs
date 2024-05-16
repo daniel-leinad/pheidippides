@@ -10,7 +10,6 @@ macro_rules! async_result {
     };
 }
 
-// TODO rewrite trait to accept references as much as possible
 pub trait DataAccess: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;
 
@@ -59,7 +58,7 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
 
     fn find_users_chats(&self, user_id: &UserId) -> async_result!(Vec<User>);
 
-    fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> async_result!(Vec<Message>);
+    fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> async_result!(Vec<Message>);
     fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> async_result!(Vec<Message>);
     fn create_message(&self, message: &Message) -> async_result!(());
 }

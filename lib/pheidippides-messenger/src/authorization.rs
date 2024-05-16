@@ -9,7 +9,6 @@ macro_rules! async_result {
     };
 }
 
-//TODO accept passwords as a reference?
 pub trait AuthService: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;
 

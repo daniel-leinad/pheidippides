@@ -1,5 +1,4 @@
 use web_server;
-use pheidippides_messenger::messenger;
 use pheidippides_web::routing;
 use mock_db;
 use mock_db::Db;

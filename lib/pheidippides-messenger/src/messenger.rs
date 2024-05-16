@@ -77,7 +77,7 @@ impl<D: DataAccess, A> Messenger<D, A> {
         Ok(message.id)
     }
 
-    pub async fn fetch_last_messages(&self, current_user: &UserId, other_user: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>> {
+    pub async fn fetch_last_messages(&self, current_user: &UserId, other_user: &UserId, starting_point: Option<&MessageId>) -> Result<Vec<Message>> {
         self.data_access.fetch_last_messages_in_chat(current_user, other_user, starting_point).await
             .with_context(|| format!("Could not fetch last messages.\
                 current_user: {current_user}, other_user: {other_user}, starting_point: {starting_point:?}"))

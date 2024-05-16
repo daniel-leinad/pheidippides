@@ -176,11 +176,11 @@ impl DataAccess for Db {
         Ok(res)
     }
 
-    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
+    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> Result<Vec<Message>, Error> {
         let res = self.messages.lock()?.iter()
             .rev()
             .skip_while(|msg_record| match &starting_point {
-                Some(starting_id) => msg_record.id != *starting_id,
+                Some(starting_id) => msg_record.id != **starting_id,
                 None => false
             })
             .skip(if starting_point.is_some() {1} else {0})
