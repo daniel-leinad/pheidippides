@@ -9,9 +9,9 @@ pub fn main() -> anyhow::Result<Response> {
     Ok(Response::Redirect{location: "/chat".into(), headers: Vec::new()})
 }
 
-pub async fn chat<D: DataAccess, T: AsyncRead + Unpin>(
+pub async fn chat<D: DataAccess, A, T: AsyncRead + Unpin>(
     request: &Request<T>,
-    app: Messenger<D>,
+    app: Messenger<D, A>,
     _chat_id: Option<&str>,
 ) -> anyhow::Result<Response> {
 

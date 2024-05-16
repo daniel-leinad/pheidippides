@@ -2,10 +2,11 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
-use pheidippides_messenger::data_access;
+use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_web::request_handler;
 
 use mock_db;
+use pheidippides_messenger::authorization::AuthStorage;
 use postgres_db;
 
 #[derive(Parser, Debug)]
@@ -48,8 +49,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_server(db_access: impl data_access::DataAccess, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
-    let request_handler = request_handler::RequestHandler::new(db_access.clone());
+async fn run_server<T: DataAccess + AuthStorage>(data_access: T, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
+    let request_handler = request_handler::RequestHandler::new(data_access.clone(), data_access);
     web_server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
     Ok(())
 }

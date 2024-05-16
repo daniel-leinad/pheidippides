@@ -11,7 +11,7 @@ async fn returns_bad_request_for_wrong_url() {
         .build();
     let mut request = web_server::Request::try_from_stream(reader).await.unwrap();
     let db_access = mock_db::Db::new().await;
-    let app = messenger::Messenger::new(db_access);
+    let app = messenger::Messenger::new(db_access.clone(), db_access);
     let response = routing::route(&mut request, app).await.unwrap();
     let is_bad_request = if let web_server::Response::BadRequest = response {true} else {false};
     assert!(is_bad_request);

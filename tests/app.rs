@@ -1,13 +1,14 @@
 #![feature(assert_matches)]
 use std::assert_matches::assert_matches;
 
-use pheidippides_messenger::{messenger, Message};
+use pheidippides_messenger::Message;
+use pheidippides_messenger::messenger::Messenger;
 use mock_db;
+use mock_db::Db;
 
 #[tokio::test]
 async fn subscribes_to_new_messages_without_starting_point() {
-    let db_access = mock_db::Db::new().await;
-    let app = messenger::Messenger::new(db_access);
+    let app = make_app().await;
     let user_id_1 = app.create_user("TestUser_1", "12345".into()).await.unwrap().unwrap();
     let user_id_2 = app.create_user("TestUser_2", "12345".into()).await.unwrap().unwrap();
     let user_id_3 = app.create_user("TestUser_3", "12345".into()).await.unwrap().unwrap();
@@ -31,8 +32,7 @@ async fn subscribes_to_new_messages_without_starting_point() {
 
 #[tokio::test]
 async fn subscribtions_to_new_messages_without_starting_point_dont_conflict() {
-    let db_access = mock_db::Db::new().await;
-    let app = messenger::Messenger::new(db_access);
+    let app = make_app().await;
     let user_id_1 = app.create_user("TestUser_1", "12345".into()).await.unwrap().unwrap();
     let user_id_2 = app.create_user("TestUser_2", "12345".into()).await.unwrap().unwrap();
     let user_id_3 = app.create_user("TestUser_3", "12345".into()).await.unwrap().unwrap();
@@ -60,8 +60,7 @@ async fn subscribtions_to_new_messages_without_starting_point_dont_conflict() {
 
 #[tokio::test]
 async fn subscribes_to_new_messages_with_starting_point() {
-    let db_access = mock_db::Db::new().await;
-    let app = messenger::Messenger::new(db_access);
+    let app = make_app().await;
     let user_id_1 = app.create_user("TestUser_1", "12345".into()).await.unwrap().unwrap();
     let user_id_2 = app.create_user("TestUser_2", "12345".into()).await.unwrap().unwrap();
     let user_id_3 = app.create_user("TestUser_3", "12345".into()).await.unwrap().unwrap();
@@ -91,4 +90,48 @@ async fn subscribes_to_new_messages_with_starting_point() {
 
     assert_matches!(subscription.recv().await.unwrap(), 
         Message{ from, to, message, ..} if from == user_id_3 && to == user_id_1 && &message == "Message 10");
+}
+
+#[tokio::test]
+async fn authorization_works_correctly() {
+    let app = make_app().await;
+
+    assert!(app.verify_user("User1", "User1".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("User2", "12345".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("__invalid_user", "12345".to_owned()).await.unwrap().is_none());
+
+    app.create_user("User1", "User1".to_owned()).await.unwrap();
+
+    assert!(app.verify_user("User1", "User1".to_owned()).await.unwrap().is_some());
+    assert!(app.verify_user("User2", "12345".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("__invalid_user", "12345".to_owned()).await.unwrap().is_none());
+
+    app.create_user("User2", "User2".to_owned()).await.unwrap();
+
+    assert!(app.verify_user("User1", "User1".to_owned()).await.unwrap().is_some());
+    assert!(app.verify_user("User2", "12345".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("__invalid_user", "12345".to_owned()).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn authorization_ignores_case() {
+    let app = make_app().await;
+
+    assert!(app.verify_user("User1", "User1".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("User1", "user1".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("user1", "User1".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("user1", "user1".to_owned()).await.unwrap().is_none());
+
+    app.create_user("User1", "User1".to_owned()).await.unwrap();
+
+    assert!(app.verify_user("User1", "User1".to_owned()).await.unwrap().is_some());
+    assert!(app.verify_user("User1", "user1".to_owned()).await.unwrap().is_none());
+    assert!(app.verify_user("user1", "User1".to_owned()).await.unwrap().is_some());
+    assert!(app.verify_user("user1", "user1".to_owned()).await.unwrap().is_none());
+}
+
+async fn make_app() -> Messenger<Db, Db> {
+    let db_access = Db::empty();
+    let app = Messenger::new(db_access.clone(), db_access);
+    app
 }

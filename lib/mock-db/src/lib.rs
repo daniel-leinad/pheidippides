@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
-use pheidippides_messenger::{authorization, User, Message, MessageId, UserId};
+use pheidippides_messenger::{Message, MessageId, User, UserId};
+use pheidippides_messenger::authorization::{AuthenticationInfo, AuthService, AuthStorage};
 use pheidippides_messenger::data_access::*;
 
 struct MessageRecord {
@@ -54,6 +55,13 @@ pub struct Db {
 }
 
 impl Db {
+    pub fn empty() -> Self {
+        Self {
+            users: Arc::new(Mutex::new(vec![])),
+            messages: Arc::new(Mutex::new(vec![])),
+            auth: Arc::new(Mutex::new(vec![])),
+        }
+    }
     pub async fn new() -> Self {
         let mut users_vec = vec![
             (uuid::Uuid::new_v4(), "User1".into()),
@@ -106,13 +114,15 @@ impl Db {
         
         let res = Db { users, messages, auth };
 
+        let auth_service = AuthService::new(res.clone());
+
         let credentials = [
             (username_id_map["User1"], "User1"),
             (username_id_map["User2"], "User2"),
         ];
 
         for (user_id, password) in credentials {
-            authorization::create_user(&user_id.to_owned(), password.to_owned(), &res).await.expect("Unable to create authentication while making mock db");
+            auth_service.create_user(&user_id.to_owned(), password.to_owned()).await.expect("Unable to create authentication while making mock db");
         };
         res
     }
@@ -219,6 +229,10 @@ impl DataAccess for Db {
         messages_lock.push(new_message);
         Ok(())
     }
+}
+
+impl AuthStorage for Db {
+    type Error = Error;
 
     async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
         let res = self.auth.lock()?

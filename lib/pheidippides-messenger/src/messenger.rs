@@ -3,12 +3,14 @@ use tokio::sync::mpsc;
 use pheidippides_utils::utils::log_internal_error;
 
 use crate::data_access::DataAccess;
-use crate::{authorization, Message, MessageId, User, UserId};
+use crate::{Message, MessageId, User, UserId};
 use crate::subscriptions_handler::SubscriptionsHandler;
+use crate::authorization::{AuthService, AuthStorage};
 
 #[derive(Clone)]
-pub struct Messenger<D: DataAccess> {
+pub struct Messenger<D, T> {
     data_access: D,
+    authorization_service: AuthService<T>,
     subscriptions_handler: SubscriptionsHandler<D>,
 }
 
@@ -16,41 +18,11 @@ pub enum UserCreationError {
     UsernameTaken,
 }
 
-impl<D: DataAccess> Messenger<D> {
-    pub fn new(data_access: D) -> Self {
+impl<D: DataAccess, A> Messenger<D, A> {
+    pub fn new(data_access: D, auth_storage: A) -> Self {
         let subscriptions_handler = SubscriptionsHandler::new(data_access.clone());
-        Messenger { data_access, subscriptions_handler }
-    }
-
-    pub async fn create_user(&self, login: &str, password: String) -> Result<Option<UserId>> {
-        let user_id = match self.data_access
-            .create_user(login).await
-            .with_context(|| format!("Couldn't create user {}", login))? {
-            Some(user_id) => user_id,
-            None => return Ok(None),
-        };
-
-        authorization::create_user(&user_id, password, &self.data_access).await.with_context(
-            || format!("Authorization error: couldn't create user {}", login))?;
-        
-        Ok(Some(user_id))
-    }
-
-    pub async fn verify_user(&self, username: &str, password: String) -> Result<Option<UserId>> {
-        let user_id = match self.find_user_by_username(username).await? {
-            Some(user_id) => user_id,
-            None => return Ok(None),
-        };
-
-        let res = authorization
-            ::verify_user(&user_id, password, &self.data_access).await
-            .with_context(|| format!("Authorization error: couldn't verify user {}", &user_id))?;
-
-        if res {
-            Ok(Some(user_id))
-        } else {
-            Ok(None)
-        }
+        let authorization_service = AuthService::new(auth_storage);
+        Messenger { data_access, authorization_service, subscriptions_handler }
     }
 
     pub async fn fetch_user(&self, user_id: &UserId) -> Result<Option<User>> {
@@ -60,17 +32,22 @@ impl<D: DataAccess> Messenger<D> {
         Ok(user)
     }
 
+    async fn find_user_by_username(&self, username: &str) -> Result<Option<UserId>> {
+        self.data_access.find_user_by_username(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
+    }
+
     pub async fn fetch_username(&self, user_id: &UserId) -> Result<Option<String>> {
+        // TODO delete this?
         let user = self.fetch_user(user_id).await?;
         Ok(user.map(|user| user.username))
     }
 
     pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<User>> {
-        
+
         let chats = self.data_access
-                .find_users_chats(&user_id).await
-                .with_context(|| format!("Couldn't fetch chats for user {user_id}"))?;
-        
+            .find_users_chats(&user_id).await
+            .with_context(|| format!("Couldn't fetch chats for user {user_id}"))?;
+
         Ok(chats)
     }
 
@@ -110,8 +87,37 @@ impl<D: DataAccess> Messenger<D> {
     pub async fn subscribe_to_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> Result<mpsc::UnboundedReceiver<Message>> {
         self.subscriptions_handler.subscribe_new_messages(user_id, starting_point).await
     }
+}
 
-    async fn find_user_by_username(&self, username: &str) -> Result<Option<UserId>> {
-        self.data_access.find_user_by_username(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
+impl<D: DataAccess, A: AuthStorage> Messenger<D, A> {
+    pub async fn verify_user(&self, username: &str, password: String) -> Result<Option<UserId>> {
+        let user_id = match self.find_user_by_username(username).await? {
+            Some(user_id) => user_id,
+            None => return Ok(None),
+        };
+
+        let res = self.authorization_service
+            .verify_user(&user_id, password).await
+            .with_context(|| format!("Authorization error: couldn't verify user {}", &user_id))?;
+
+        if res {
+            Ok(Some(user_id))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn create_user(&self, login: &str, password: String) -> Result<Option<UserId>> {
+        let user_id = match self.data_access
+            .create_user(login).await
+            .with_context(|| format!("Couldn't create user {}", login))? {
+            Some(user_id) => user_id,
+            None => return Ok(None),
+        };
+
+        self.authorization_service.create_user(&user_id, password).await.with_context(
+            || format!("Authorization error: couldn't create user {}", login))?;
+
+        Ok(Some(user_id))
     }
 }
