@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 pheidippides-messenger = {path="../pheidippides-messenger"}
+pheidippides-utils = {path="../pheidippides-utils"}
 anyhow = "1.0.83"
 rand_core = "0.9.0-alpha.1"
 thiserror = "1.0.60"

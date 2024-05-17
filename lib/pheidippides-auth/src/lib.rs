@@ -1,5 +1,4 @@
 use std::fmt::{Debug, Display, Formatter};
-use std::future::Future;
 use std::result::Result;
 
 use anyhow::{bail, Context, Error};
@@ -18,12 +17,7 @@ use thiserror::Error;
 use pheidippides_messenger::UserId;
 use pheidippides_messenger::authorization::AuthService;
 
-//TODO code duplication
-macro_rules! async_result {
-    ($t:ty) => {
-        impl Future<Output = Result<$t, Self::Error>> + Send
-    };
-}
+use pheidippides_utils::async_result;
 
 pub trait AuthStorage: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;

@@ -1,13 +1,6 @@
-use std::future::Future;
-
 use crate::UserId;
 
-//TODO code duplication
-macro_rules! async_result {
-    ($t:ty) => {
-        impl Future<Output = Result<$t, Self::Error>> + Send
-    };
-}
+use pheidippides_utils::async_result;
 
 pub trait AuthService: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;

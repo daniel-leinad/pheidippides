@@ -1047,6 +1047,7 @@ dependencies = [
  "argon2",
  "password-hash",
  "pheidippides-messenger",
+ "pheidippides-utils",
  "rand_core 0.9.0-alpha.1",
  "thiserror",
  "tokio",

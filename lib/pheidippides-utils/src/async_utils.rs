@@ -1,5 +1,12 @@
 use tokio::sync::{broadcast, mpsc::{self, UnboundedReceiver, UnboundedSender}};
 
+#[macro_export]
+macro_rules! async_result {
+    ($t:ty) => {
+        impl std::future::Future<Output = std::result::Result<$t, Self::Error>> + std::marker::Send
+    };
+}
+
 pub fn pipe_unbounded_channel<I, O, F>(mut channel: UnboundedReceiver<I>, mut f: F) -> UnboundedReceiver<O>
 where
     I: 'static + Send, 

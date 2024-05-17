@@ -1,14 +1,8 @@
-use std::future::Future;
 use crate::{Message, MessageId, User, UserId};
 
 pub const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 
-// written as a macro to use Self::Error
-macro_rules! async_result {
-    ($t:ty) => {
-        impl Future<Output = Result<$t, Self::Error>> + Send
-    };
-}
+use pheidippides_utils::async_result;
 
 pub trait DataAccess: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;
