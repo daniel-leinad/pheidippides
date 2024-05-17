@@ -89,11 +89,9 @@ fn unauthorized_redirect() -> Response {
     Response::Redirect{location: "/login".into(), headers: Vec::new()}
 }
 
-// TODO return 'static reference for optimisation?
 fn get_authorization(headers: &HashMap<CaseInsensitiveString, String>) -> Result<Option<UserId>> {
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
-        // TODO handle error
         Err(_) => return Ok(None),
     };
 

@@ -354,7 +354,6 @@ fn temp_table_name(name: &str) -> String {
     pg_id(&format!("temp_{name}_{}", Uuid::new_v4()))
 }
 
-//TODO possibly use Cow for optimization
 fn pg_id(input: &str) -> String {
     format!("\"{}\"", input.replace("\"", "\"\""))
 }

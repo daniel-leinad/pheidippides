@@ -59,7 +59,7 @@ pub async fn fetches_last_messages(db_access: &impl DataAccess) {
         (uuid!("a82a13cd-7b34-4911-9319-0ae718287197"), user_3, user_1, "Message 8"),
     ];
 
-    //TODO assert that message len fits into buffer
+    assert!(pheidippides_messenger::data_access::MESSAGE_LOAD_BUF_SIZE > messages.len() as i32);
 
     let starting_id = uuid!("ce9fe950-c323-4b3b-8a63-1c5497b2f582");
 
