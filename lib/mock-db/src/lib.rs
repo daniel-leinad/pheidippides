@@ -4,7 +4,7 @@ use pheidippides_messenger::{Message, MessageId, User, UserId};
 use pheidippides_messenger::authorization::AuthService;
 use pheidippides_messenger::data_access::*;
 
-use pheidippides_auth::{AuthServiceImpl, AuthenticationInfo, AuthStorage};
+use pheidippides_auth::{AuthServiceUsingArgon2, AuthenticationInfo, AuthStorage};
 
 struct MessageRecord {
     id: MessageId,
@@ -116,7 +116,7 @@ impl Db {
         
         let res = Db { users, messages, auth };
 
-        let auth_service = AuthServiceImpl::new(res.clone());
+        let auth_service = AuthServiceUsingArgon2::new(res.clone());
 
         let credentials = [
             (username_id_map["User1"], "User1"),

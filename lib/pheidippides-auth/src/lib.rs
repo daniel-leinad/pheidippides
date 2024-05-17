@@ -42,19 +42,18 @@ impl Display for AuthServiceError {
 
 impl std::error::Error for AuthServiceError {}
 
-//TODO come up with a better name
 #[derive(Clone)]
-pub struct AuthServiceImpl<A> {
+pub struct AuthServiceUsingArgon2<A> {
     storage: A
 }
 
-impl<A> AuthServiceImpl<A> {
+impl<A> AuthServiceUsingArgon2<A> {
     pub fn new(storage: A) -> Self {
         Self { storage }
     }
 }
 
-impl<A: AuthStorage> AuthService for AuthServiceImpl<A> {
+impl<A: AuthStorage> AuthService for AuthServiceUsingArgon2<A> {
     type Error = AuthServiceError;
 
     async fn verify_user(&self, user_id: &UserId, password: String) -> Result<bool, Self::Error> {
