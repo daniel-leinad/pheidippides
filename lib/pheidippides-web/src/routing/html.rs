@@ -44,7 +44,7 @@ struct LoginFailPage {}
 pub async fn chat_page<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<String> {
     let username= app
         .fetch_user(&user_id).await?
-        .with_context(|| format!("Incorrect user id: {user_id}"))?
+        .with_context(|| format!("Incorrect user id: {user_id}"))? // TODO don't like the fact that this becomes a server error
         .username;
     
     let users_chats = app.fetch_users_chats(user_id).await?;
@@ -66,8 +66,7 @@ pub fn login_fail_page() -> Result<String> {
 
 pub async fn chats_html_response<A, T: AsyncRead + Unpin>(request: &Request<T>, app: Messenger<impl DataAccess, A>) -> Response {
     let headers = request.headers();
-    // TODO I don't like that if authorization fails, this returns a server error
-    let authorization = get_authorization(headers).or_server_error()?;
+    let authorization = get_authorization(headers).or_bad_request()?;
     let response_string = match authorization {
         Some(user_id) => chats_html(&app, &user_id).await.or_server_error()?,
         None => String::from("Unauthorized"),
@@ -88,10 +87,9 @@ struct ChatSearchParams {
 
 pub async fn chatsearch_html<A>(app: Messenger<impl DataAccess, A>, params: &str) -> Response {
 
-    let search_params: ChatSearchParams = match serde_form_data::from_str(params) {
-        Ok(res) => res,
-        Err(_) => return Response::Empty, // TODO use BadRequest instead
-    };
+    // TODO check authorization
+
+    let search_params: ChatSearchParams = serde_form_data::from_str(params).or_bad_request()?;
 
     let chats = app.find_users_by_substring(&search_params.query).await.or_server_error()?;
 
