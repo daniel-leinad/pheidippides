@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use pheidippides_utils::utils::CaseInsensitiveString;
-use pheidippides_utils::utils::Header;
+use pheidippides_utils::http::Header;
 
 pub struct HttpResponse(Vec<u8>);
 

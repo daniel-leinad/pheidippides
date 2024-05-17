@@ -15,11 +15,12 @@ use http_server::request::Request;
 use http_server::response::Response;
 
 use pheidippides_utils::utils::{
-    CaseInsensitiveString, get_cookies_hashmap, log_internal_error
+    CaseInsensitiveString, log_internal_error
 };
 use pheidippides_messenger::UserId;
 use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::data_access::DataAccess;
+use pheidippides_utils::http::get_cookies_hashmap;
 
 use crate::request_handler::RequestHandlerError;
 use crate::sessions;

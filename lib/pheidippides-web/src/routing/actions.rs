@@ -7,10 +7,11 @@ use pheidippides_messenger::{MessageId, UserId};
 use pheidippides_messenger::authorization::AuthService;
 use pheidippides_utils::async_utils;
 use pheidippides_utils::serde::form_data;
-use pheidippides_utils::utils::{CaseInsensitiveString, get_cookies_hashmap, header_set_cookie};
+use pheidippides_utils::utils::CaseInsensitiveString;
 use http_server::response::Response;
 use http_server::event_source::EventSourceEvent;
 use http_server::request::Request;
+use pheidippides_utils::http::{get_cookies_hashmap, header_set_cookie};
 use crate::{routing, sessions};
 use crate::routing::json::MessageJson;
 

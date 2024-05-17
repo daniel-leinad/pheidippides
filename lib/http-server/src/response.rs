@@ -1,4 +1,4 @@
-use pheidippides_utils::utils::Header;
+use pheidippides_utils::http::Header;
 use tokio::sync::mpsc::UnboundedReceiver;
 use crate::event_source::EventSourceEvent;
 
