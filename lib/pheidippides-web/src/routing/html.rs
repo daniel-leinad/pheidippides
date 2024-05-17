@@ -40,9 +40,10 @@ struct SignUpPage {}
 struct LoginFailPage {}
 
 pub async fn chat_page<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<String> {
-    let username = app
-         .fetch_username(&user_id).await?
-         .with_context(|| format!("Incorrect user id: {user_id}"))?;
+    let username= app
+        .fetch_user(&user_id).await?
+        .with_context(|| format!("Incorrect user id: {user_id}"))?
+        .username;
     
     let users_chats = app.fetch_users_chats(user_id).await?;
 

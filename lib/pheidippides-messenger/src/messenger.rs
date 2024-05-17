@@ -35,12 +35,6 @@ impl<D: DataAccess, A> Messenger<D, A> {
         self.data_access.find_user_by_username(username).await.with_context(|| format!("Couldn't fetch user_id for username {username}"))
     }
 
-    pub async fn fetch_username(&self, user_id: &UserId) -> Result<Option<String>> {
-        // TODO delete this?
-        let user = self.fetch_user(user_id).await?;
-        Ok(user.map(|user| user.username))
-    }
-
     pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<User>> {
 
         let chats = self.data_access
