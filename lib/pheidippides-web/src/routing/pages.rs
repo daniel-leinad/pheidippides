@@ -1,7 +1,8 @@
 use tokio::io::AsyncRead;
 use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_messenger::messenger::Messenger;
-use http_server::{Request, Response};
+use http_server::response::Response;
+use http_server::request::Request;
 use crate::routing;
 use crate::routing::html;
 

@@ -2,7 +2,8 @@ use tokio::io::AsyncRead;
 use askama::Template;
 use anyhow::Result;
 
-use http_server::{Request, Response};
+use http_server::response::Response;
+use http_server::request::Request;
 
 #[derive(Template)]
 #[template(path = "tools/event_source.html")]

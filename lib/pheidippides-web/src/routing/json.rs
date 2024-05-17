@@ -5,7 +5,8 @@ use chrono::DateTime;
 
 use pheidippides_utils::serde::form_data as serde_form_data;
 
-use http_server::{Request, Response};
+use http_server::response::Response;
+use http_server::request::Request;
 
 use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_messenger::messenger::Messenger;

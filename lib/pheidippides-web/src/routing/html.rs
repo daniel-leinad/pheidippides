@@ -3,12 +3,13 @@ use serde::Deserialize;
 use askama::Template;
 use tokio::io::AsyncRead;
 
-use http_server::{Request, Response};
+use http_server::response::Response;
+use http_server::request::Request;
 
 use pheidippides_utils::serde::form_data as serde_form_data;
 
 use pheidippides_messenger::{User, UserId};
-use pheidippides_messenger::data_access::{DataAccess};
+use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_messenger::messenger::Messenger;
 
 use crate::routing::get_authorization;

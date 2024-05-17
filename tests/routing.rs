@@ -13,10 +13,10 @@ async fn returns_bad_request_for_wrong_url() {
         .read(b"GET /random_url/aaa/bbbbb HTTP/1.1\r\n")
         .read(b"\r\n")
         .build();
-    let mut request = http_server::Request::try_from_stream(reader).await.unwrap();
+    let mut request = http_server::request::Request::try_from_stream(reader).await.unwrap();
 
     let response = routing::route(&mut request, app).await.unwrap();
-    let is_bad_request = if let http_server::Response::BadRequest = response {true} else {false};
+    let is_bad_request = if let http_server::response::Response::BadRequest = response {true} else {false};
     assert!(is_bad_request);
 }
 

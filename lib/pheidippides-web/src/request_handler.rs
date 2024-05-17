@@ -2,7 +2,8 @@ use pheidippides_messenger::data_access::DataAccess;
 use tokio::io::AsyncRead;
 use pheidippides_messenger::authorization::AuthService;
 use pheidippides_messenger::messenger::Messenger;
-use http_server::{Request, Response};
+use http_server::response::Response;
+use http_server::request::Request;
 use crate::routing;
 
 #[derive(Clone)]
@@ -35,7 +36,7 @@ impl std::fmt::Display for RequestHandlerError {
 
 impl std::error::Error for RequestHandlerError {}
 
-impl<D: DataAccess, A: AuthService, T: AsyncRead + Unpin + Sync + Send> http_server::RequestHandler<Request<T>> for RequestHandler<D, A> {
+impl<D: DataAccess, A: AuthService, T: AsyncRead + Unpin + Sync + Send> http_server::server::RequestHandler<Request<T>> for RequestHandler<D, A> {
     type Error = RequestHandlerError;
 
     fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = anyhow::Result<Response, Self::Error>> + Send {
