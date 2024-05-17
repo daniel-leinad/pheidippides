@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
 async fn run_server<T: DataAccess + AuthStorage>(data_access: T, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
     let auth_service = AuthServiceImpl::new(data_access.clone());
     let request_handler = request_handler::RequestHandler::new(data_access, auth_service);
-    web_server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
+    http_server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
     Ok(())
 }
 

@@ -8,7 +8,7 @@ publish = false
 pheidippides-messenger = { path = "../lib/pheidippides-messenger" }
 pheidippides-web = { path = "../lib/pheidippides-web" }
 pheidippides-auth = { path = "../lib/pheidippides-auth" }
-web-server = { path = "../lib/web-server" }
+http-server = { path = "../lib/http-server" }
 mock-db = { path = "../lib/mock-db" }
 postgres-db = { path = "../lib/postgres-db" }
 tokio = "1.37.0"

@@ -3,7 +3,7 @@ use serde::Deserialize;
 use askama::Template;
 use tokio::io::AsyncRead;
 
-use web_server::{Request, Response};
+use http_server::{Request, Response};
 
 use pheidippides_utils::serde::form_data as serde_form_data;
 

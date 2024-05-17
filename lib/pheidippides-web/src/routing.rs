@@ -10,7 +10,7 @@ use anyhow::Result;
 use tokio::io::AsyncRead;
 use pheidippides_messenger::authorization::AuthService;
 
-use web_server::{self, Request, Response};
+use http_server::{self, Request, Response};
 
 use pheidippides_utils::utils::{
     CaseInsensitiveString, get_cookies_hashmap, log_internal_error
@@ -49,7 +49,7 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
         path_segments.next(),
     );
 
-    use web_server::Method::*;
+    use http_server::Method::*;
     let response = match query {
         (Get, None, ..) => pages::main(),
         (Get, Some("login"), None, ..) => pages::authorization().await,

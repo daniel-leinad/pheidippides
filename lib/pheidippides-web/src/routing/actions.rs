@@ -8,7 +8,7 @@ use pheidippides_messenger::authorization::AuthService;
 use pheidippides_utils::async_utils;
 use pheidippides_utils::serde::form_data;
 use pheidippides_utils::utils::{CaseInsensitiveString, get_cookies_hashmap, header_set_cookie};
-use web_server::{EventSourceEvent, Request, Response};
+use http_server::{EventSourceEvent, Request, Response};
 use crate::{routing, sessions};
 use crate::routing::json::MessageJson;
 

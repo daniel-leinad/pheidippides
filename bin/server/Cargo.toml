@@ -7,7 +7,7 @@ edition = "2021"
 pheidippides-messenger = {path= "../../lib/pheidippides-messenger" }
 pheidippides-web = {path= "../../lib/pheidippides-web" }
 pheidippides-auth = { path = "../../lib/pheidippides-auth" }
-web-server = {path = "../../lib/web-server"}
+http-server = {path = "../../lib/http-server" }
 postgres-db = {path = "../../lib/postgres-db" }
 mock-db = {path = "../../lib/mock-db" }
 

@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 pheidippides-messenger = { path = "../pheidippides-messenger" }
 pheidippides-utils = { path = "../pheidippides-utils" }
-web-server = { path = "../web-server" }
+http-server = { path = "../http-server" }
 
 anyhow = "1.0.83"
 askama = "0.12.1"

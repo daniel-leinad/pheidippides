@@ -5,7 +5,7 @@ members = [
     "lib/pheidippides-utils",
     "lib/pheidippides-web",
     "lib/pheidippides-auth",
-    "lib/web-server",
+    "lib/http-server",
     "lib/postgres-db",
     "lib/mock-db",
     "tests",
