@@ -2,7 +2,6 @@ use std::ops::{ControlFlow, FromResidual, Try};
 
 use http_server::response::Response;
 
-
 /// This is a convenience enum for providing early return
 /// that implements the Try trait so that it can be used with a ? operator
 ///
@@ -35,7 +34,9 @@ impl<T> Try for HttpResponseFlowController<T> {
     fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
         match self {
             HttpResponseFlowController::Value(value) => ControlFlow::Continue(value),
-            HttpResponseFlowController::HttpResponse(response) => ControlFlow::Break(HttpResponseFlowControllerResidual(response)),
+            HttpResponseFlowController::HttpResponse(response) => {
+                ControlFlow::Break(HttpResponseFlowControllerResidual(response))
+            }
         }
     }
 }
@@ -64,7 +65,7 @@ pub trait HttpResponseContextExtension: HttpResponseContext + Sized {
     fn or_bad_request(self) -> HttpResponseFlowController<Self::Output> {
         match self.check() {
             Some(value) => HttpResponseFlowController::Value(value),
-            None => HttpResponseFlowController::HttpResponse(Response::BadRequest)
+            None => HttpResponseFlowController::HttpResponse(Response::BadRequest),
         }
     }
 
@@ -72,7 +73,7 @@ pub trait HttpResponseContextExtension: HttpResponseContext + Sized {
         // TODO log internal error
         match self.check() {
             Some(value) => HttpResponseFlowController::Value(value),
-            None => HttpResponseFlowController::HttpResponse(Response::InternalServerError)
+            None => HttpResponseFlowController::HttpResponse(Response::InternalServerError),
         }
     }
 
@@ -89,7 +90,7 @@ impl<T> HttpResponseContext for Option<T> {
     }
 }
 
-impl <T, E> HttpResponseContext for Result<T, E> {
+impl<T, E> HttpResponseContext for Result<T, E> {
     type Output = T;
 
     fn check(self) -> Option<Self::Output> {
@@ -103,8 +104,8 @@ impl <T, E> HttpResponseContext for Result<T, E> {
 
 #[cfg(test)]
 mod tests {
-    use http_server::response::Response;
     use super::HttpResponseContextExtension;
+    use http_server::response::Response;
 
     #[test]
     fn control_flow_works_option() {

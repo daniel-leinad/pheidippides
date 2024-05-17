@@ -1,10 +1,10 @@
-use pheidippides_messenger::data_access::DataAccess;
-use tokio::io::AsyncRead;
-use pheidippides_messenger::authorization::AuthService;
-use pheidippides_messenger::messenger::Messenger;
-use http_server::response::Response;
-use http_server::request::Request;
 use crate::routing;
+use http_server::request::Request;
+use http_server::response::Response;
+use pheidippides_messenger::authorization::AuthService;
+use pheidippides_messenger::data_access::DataAccess;
+use pheidippides_messenger::messenger::Messenger;
+use tokio::io::AsyncRead;
 
 #[derive(Clone)]
 pub struct RequestHandler<D: DataAccess, A> {
@@ -13,7 +13,9 @@ pub struct RequestHandler<D: DataAccess, A> {
 
 impl<D: DataAccess, A> RequestHandler<D, A> {
     pub fn new(db_access: D, auth_storage: A) -> Self {
-        RequestHandler { app: Messenger::new(db_access, auth_storage) }
+        RequestHandler {
+            app: Messenger::new(db_access, auth_storage),
+        }
     }
 }
 
@@ -36,10 +38,15 @@ impl std::fmt::Display for RequestHandlerError {
 
 impl std::error::Error for RequestHandlerError {}
 
-impl<D: DataAccess, A: AuthService, T: AsyncRead + Unpin + Sync + Send> http_server::server::RequestHandler<Request<T>> for RequestHandler<D, A> {
+impl<D: DataAccess, A: AuthService, T: AsyncRead + Unpin + Sync + Send>
+    http_server::server::RequestHandler<Request<T>> for RequestHandler<D, A>
+{
     type Error = RequestHandlerError;
 
-    fn handle(self, request: &mut Request<T>) -> impl std::future::Future<Output = anyhow::Result<Response, Self::Error>> + Send {
+    fn handle(
+        self,
+        request: &mut Request<T>,
+    ) -> impl std::future::Future<Output = anyhow::Result<Response, Self::Error>> + Send {
         routing::route(request, self.app)
     }
 }

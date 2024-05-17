@@ -1,11 +1,14 @@
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 
 use postgres_db::Db;
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(id="CONNECTION URL", help="Database conneciton url. Format: postgresql://[user[:password]@][host][:port][/dbname][?param1=value1&...]")]
+    #[arg(
+        id = "CONNECTION URL",
+        help = "Database conneciton url. Format: postgresql://[user[:password]@][host][:port][/dbname][?param1=value1&...]"
+    )]
     db: String,
 }
 

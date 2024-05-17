@@ -95,7 +95,8 @@ mod tests {
 
     #[test]
     fn decodes_special_symbols() {
-        let res: OneStringField = from_str("field_1=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82%21").unwrap();
+        let res: OneStringField =
+            from_str("field_1=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82%21").unwrap();
         assert_eq!(res.field_1, "Привет!");
     }
 
@@ -195,7 +196,8 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
-        V: de::Visitor<'de> {
+        V: de::Visitor<'de>,
+    {
         let map = KeyValuePairs::new(self.str);
         visitor.visit_map(map)
     }
@@ -207,7 +209,8 @@ impl<'de> de::Deserializer<'de> for Deserializer<'de> {
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
-        V: de::Visitor<'de> {
+        V: de::Visitor<'de>,
+    {
         self.deserialize_map(visitor)
     }
 
@@ -320,7 +323,8 @@ impl<'de> de::Deserializer<'de> for StringValue<'de> {
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
-        V: de::Visitor<'de> {
+        V: de::Visitor<'de>,
+    {
         visitor.visit_some(self)
     }
 

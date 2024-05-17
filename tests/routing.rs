@@ -1,7 +1,7 @@
-use pheidippides_web::routing;
 use mock_db::Db;
 use pheidippides_auth::AuthServiceUsingArgon2;
 use pheidippides_messenger::messenger::Messenger;
+use pheidippides_web::routing;
 
 #[tokio::test]
 async fn returns_bad_request_for_wrong_url() {
@@ -11,7 +11,9 @@ async fn returns_bad_request_for_wrong_url() {
         .read(b"GET /random_url/aaa/bbbbb HTTP/1.1\r\n")
         .read(b"\r\n")
         .build();
-    let mut request = http_server::request::Request::try_from_stream(reader).await.unwrap();
+    let mut request = http_server::request::Request::try_from_stream(reader)
+        .await
+        .unwrap();
 
     let response = routing::route(&mut request, app).await.unwrap();
     assert!(response.is_bad_request());

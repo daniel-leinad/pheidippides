@@ -1,10 +1,10 @@
-use uuid::Uuid;
-use chrono::DateTime;
 use crate::data_access::DataAccess;
+use chrono::DateTime;
+use uuid::Uuid;
 
-pub mod messenger;
-pub mod data_access;
 pub mod authorization;
+pub mod data_access;
+pub mod messenger;
 mod subscriptions_handler;
 
 pub type MessageId = Uuid;
@@ -17,7 +17,9 @@ pub struct User {
 }
 
 impl User {
-    pub fn new<T: DataAccess>(id: UserId, username: String) -> Self { User {username, id} }
+    pub fn new<T: DataAccess>(id: UserId, username: String) -> Self {
+        User { username, id }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]

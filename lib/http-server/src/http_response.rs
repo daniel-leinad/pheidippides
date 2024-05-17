@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use pheidippides_utils::utils::CaseInsensitiveString;
 use pheidippides_utils::http::Header;
+use pheidippides_utils::utils::CaseInsensitiveString;
+use std::collections::HashMap;
 
 pub struct HttpResponse(Vec<u8>);
 
@@ -23,7 +23,12 @@ impl<'a> HttpResponseBuilder<'a> {
         let status = HttpStatusCode::OK;
         let headers = HashMap::new();
         let body = None;
-        HttpResponseBuilder{version, status, headers, body}
+        HttpResponseBuilder {
+            version,
+            status,
+            headers,
+            body,
+        }
     }
 
     pub fn build(&mut self) -> HttpResponse {
@@ -32,11 +37,14 @@ impl<'a> HttpResponseBuilder<'a> {
 
         // headers
         if let Some(body) = self.body {
-            self.headers.insert(CaseInsensitiveString::from("Content-Length"), format!("{}", body.len()));
+            self.headers.insert(
+                CaseInsensitiveString::from("Content-Length"),
+                format!("{}", body.len()),
+            );
         };
         for (key, value) in self.headers.iter() {
             lines.push(format!("{key}: {value}\r\n").into_bytes());
-        };
+        }
         lines.push(b"\r\n".into());
 
         // body
@@ -64,22 +72,34 @@ impl<'a> HttpResponseBuilder<'a> {
     }
 
     pub fn content_text(&mut self) -> &mut Self {
-        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "text/plain; charset=utf-8".to_owned());
+        self.headers.insert(
+            CaseInsensitiveString::from("Content-Type"),
+            "text/plain; charset=utf-8".to_owned(),
+        );
         self
     }
 
     pub fn content_html(&mut self) -> &mut Self {
-        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "text/html; charset=utf-8".to_owned());
+        self.headers.insert(
+            CaseInsensitiveString::from("Content-Type"),
+            "text/html; charset=utf-8".to_owned(),
+        );
         self
     }
 
     pub fn content_json(&mut self) -> &mut Self {
-        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "application/json; charset=utf-8".to_owned());
+        self.headers.insert(
+            CaseInsensitiveString::from("Content-Type"),
+            "application/json; charset=utf-8".to_owned(),
+        );
         self
     }
 
     pub fn content_event_stream(&mut self) -> &mut Self {
-        self.headers.insert(CaseInsensitiveString::from("Content-Type"), "text/event-stream; charset=utf-8".to_owned());
+        self.headers.insert(
+            CaseInsensitiveString::from("Content-Type"),
+            "text/event-stream; charset=utf-8".to_owned(),
+        );
         self
     }
 }
@@ -97,7 +117,7 @@ impl std::fmt::Display for HttpStatusCode {
             Self::OK => "200 OK",
             Self::BadRequest => "400 Bad Request",
             Self::SeeOther => "303 See Other",
-            Self::InternalServerError => "500 Internal Server Error", 
+            Self::InternalServerError => "500 Internal Server Error",
         };
         write!(f, "{str_repr}")
     }

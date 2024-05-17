@@ -1,4 +1,7 @@
-use tokio::sync::{broadcast, mpsc::{self, UnboundedReceiver, UnboundedSender}};
+use tokio::sync::{
+    broadcast,
+    mpsc::{self, UnboundedReceiver, UnboundedSender},
+};
 
 #[macro_export]
 macro_rules! async_result {
@@ -7,11 +10,14 @@ macro_rules! async_result {
     };
 }
 
-pub fn pipe_unbounded_channel<I, O, F>(mut channel: UnboundedReceiver<I>, mut f: F) -> UnboundedReceiver<O>
+pub fn pipe_unbounded_channel<I, O, F>(
+    mut channel: UnboundedReceiver<I>,
+    mut f: F,
+) -> UnboundedReceiver<O>
 where
-    I: 'static + Send, 
-    O: 'static + Send, 
-    F: 'static + FnMut(I) -> Option<O> + Send
+    I: 'static + Send,
+    O: 'static + Send,
+    F: 'static + FnMut(I) -> Option<O> + Send,
 {
     let (sender, receiver) = mpsc::unbounded_channel();
     tokio::spawn(async move {
@@ -43,11 +49,14 @@ where
     receiver
 }
 
-pub fn pipe_broadcast<I, O, F>(mut in_channel: broadcast::Receiver<I>, mut f: F) -> UnboundedReceiver<O>
+pub fn pipe_broadcast<I, O, F>(
+    mut in_channel: broadcast::Receiver<I>,
+    mut f: F,
+) -> UnboundedReceiver<O>
 where
-    I: 'static + Send + Clone, 
-    O: 'static + Send, 
-    F: 'static + FnMut(I) -> Option<O> + Send
+    I: 'static + Send + Clone,
+    O: 'static + Send,
+    F: 'static + FnMut(I) -> Option<O> + Send,
 {
     let (sender, receiver) = mpsc::unbounded_channel();
     tokio::spawn(async move {
@@ -79,7 +88,10 @@ where
     receiver
 }
 
-pub fn redirect_unbounded_channel<T: 'static + Send>(mut from: UnboundedReceiver<T>, to: UnboundedSender<T>) {
+pub fn redirect_unbounded_channel<T: 'static + Send>(
+    mut from: UnboundedReceiver<T>,
+    to: UnboundedSender<T>,
+) {
     tokio::spawn(async move {
         loop {
             tokio::select! {

@@ -1,14 +1,17 @@
-use tokio::io::AsyncRead;
-use pheidippides_messenger::data_access::DataAccess;
-use pheidippides_messenger::messenger::Messenger;
-use http_server::response::Response;
-use http_server::request::Request;
+use crate::flow_controller::HttpResponseContextExtension;
 use crate::routing;
 use crate::routing::html;
-use crate::flow_controller::HttpResponseContextExtension;
+use http_server::request::Request;
+use http_server::response::Response;
+use pheidippides_messenger::data_access::DataAccess;
+use pheidippides_messenger::messenger::Messenger;
+use tokio::io::AsyncRead;
 
 pub fn main() -> Response {
-    Response::Redirect{location: "/chat".into(), headers: Vec::new()}
+    Response::Redirect {
+        location: "/chat".into(),
+        headers: Vec::new(),
+    }
 }
 
 pub async fn chat<D: DataAccess, A, T: AsyncRead + Unpin>(
@@ -16,7 +19,6 @@ pub async fn chat<D: DataAccess, A, T: AsyncRead + Unpin>(
     app: Messenger<D, A>,
     _chat_id: Option<&str>,
 ) -> Response {
-
     let headers = request.headers();
 
     let user_id = match routing::get_authorization(headers).or_server_error()? {
@@ -24,7 +26,8 @@ pub async fn chat<D: DataAccess, A, T: AsyncRead + Unpin>(
         None => return routing::unauthorized_redirect(),
     };
 
-    let chat_page = html::chat_page(&app, &user_id).await
+    let chat_page = html::chat_page(&app, &user_id)
+        .await
         .or_server_error()?
         .or_bad_request()?;
 
@@ -47,5 +50,5 @@ pub async fn signup() -> Response {
     let content = html::signup_page().or_server_error()?;
     let headers = vec![];
 
-    Response::Html { content , headers }
+    Response::Html { content, headers }
 }
