@@ -19,7 +19,7 @@ use http_server::response::Response;
 ///
 /// HttpResponse variant when you already know the response and want to stop processing the function
 #[must_use]
-enum HttpResponseFlowController<T> {
+pub enum HttpResponseFlowController<T> {
     Value(T),
     HttpResponse(Response),
 }
@@ -46,7 +46,7 @@ impl<T> FromResidual for HttpResponseFlowController<T> {
     }
 }
 
-struct HttpResponseFlowControllerResidual(Response);
+pub struct HttpResponseFlowControllerResidual(Response);
 
 impl FromResidual<HttpResponseFlowControllerResidual> for Response {
     fn from_residual(residual: HttpResponseFlowControllerResidual) -> Self {
@@ -54,13 +54,13 @@ impl FromResidual<HttpResponseFlowControllerResidual> for Response {
     }
 }
 
-trait HttpResponseContext {
+pub trait HttpResponseContext {
     type Output;
 
     fn check(self) -> Option<Self::Output>;
 }
 
-trait HttpResponseContextExtension: HttpResponseContext + Sized {
+pub trait HttpResponseContextExtension: HttpResponseContext + Sized {
     fn or_bad_request(self) -> HttpResponseFlowController<Self::Output> {
         match self.check() {
             Some(value) => HttpResponseFlowController::Value(value),
@@ -69,11 +69,14 @@ trait HttpResponseContextExtension: HttpResponseContext + Sized {
     }
 
     fn or_server_error(self) -> HttpResponseFlowController<Self::Output> {
+        // TODO log internal error
         match self.check() {
             Some(value) => HttpResponseFlowController::Value(value),
             None => HttpResponseFlowController::HttpResponse(Response::InternalServerError)
         }
     }
+
+    // TODO add unauthorized redirect, or_empty
 }
 
 impl<T: HttpResponseContext> HttpResponseContextExtension for T {}

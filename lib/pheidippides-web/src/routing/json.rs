@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncRead;
 use chrono::DateTime;
@@ -11,6 +10,7 @@ use http_server::request::Request;
 use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::{Message, MessageId, UserId};
+use crate::flow_controller::HttpResponseContextExtension;
 
 use crate::routing::get_authorization;
 
@@ -57,28 +57,18 @@ enum MessageResponseError {
     Unauthorized,
 }
 
-pub async fn messages_json<A, T: AsyncRead + Unpin>(request: &Request<T>, app: Messenger<impl DataAccess, A>, chat_id: &str, params: &str) -> Result<Response> {
+pub async fn messages_json<A, T: AsyncRead + Unpin>(request: &Request<T>, app: Messenger<impl DataAccess, A>, chat_id: &str, params: &str) -> Response {
 
-    let chat_id: UserId = match chat_id.parse() {
-        Ok(chat_id) => chat_id,
-        Err(_) => return Ok(Response::BadRequest),
-    };
-
-    let query_params: MessagesUrlParams = match serde_form_data::from_str(params) {
-        Ok(res) => res,
-        Err(_) => return Ok(Response::BadRequest),
-    };
+    let chat_id: UserId = chat_id.parse().or_bad_request()?;
+    let query_params: MessagesUrlParams = serde_form_data::from_str(params).or_bad_request()?;
 
     let starting_from: Option<MessageId> = match query_params.from {
-        Some(v) => match v.parse() {
-            Ok(v) => Some(v),
-            Err(_) => return Ok(Response::BadRequest),
-        },
+        Some(v) => Some(v.parse().or_bad_request()?),
         None => None,
     };
 
     let headers = request.headers();
-    let user_id = match get_authorization(headers)? {
+    let user_id = match get_authorization(headers).or_server_error()? {
         Some(res) => res,
         None => {
             let response = MessagesResponse { 
@@ -86,12 +76,13 @@ pub async fn messages_json<A, T: AsyncRead + Unpin>(request: &Request<T>, app: M
                 messages: vec![], 
                 error: Some(MessageResponseError::Unauthorized),
             };
-            return Ok(Response::Json { content: serde_json::json!(response).to_string(), headers: vec![] })
+            return Response::Json { content: serde_json::json!(response).to_string(), headers: vec![] }
         },
     };
 
     let messages: Vec<_> = app
-        .fetch_last_messages(&user_id, &chat_id, starting_from.as_ref()).await?
+        .fetch_last_messages(&user_id, &chat_id, starting_from.as_ref()).await
+        .or_server_error()?
         .into_iter()
         .map(|message| message.into())
         .rev()
@@ -103,5 +94,6 @@ pub async fn messages_json<A, T: AsyncRead + Unpin>(request: &Request<T>, app: M
         error: None,
     };
     let json_response = serde_json::json!(response);
-    Ok(Response::Json{content: json_response.to_string(), headers: vec![]})
+
+    Response::Json{content: json_response.to_string(), headers: vec![]}
 }

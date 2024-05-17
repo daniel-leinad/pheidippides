@@ -14,9 +14,7 @@ use http_server::{self};
 use http_server::request::Request;
 use http_server::response::Response;
 
-use pheidippides_utils::utils::{
-    CaseInsensitiveString, log_internal_error
-};
+use pheidippides_utils::utils::CaseInsensitiveString;
 use pheidippides_messenger::UserId;
 use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::data_access::DataAccess;
@@ -68,14 +66,9 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
         (Get, Some("html"), Some("chat"), Some(chat_id), ..) => html::chat_html_response(app, chat_id).await,
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
         (Get, Some("tools"), Some("event_source"), None, ..) => tools::event_source(request),
-        (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
-        _ => Ok(Response::BadRequest),
+        (Get, Some("favicon.ico"), None, ..) => Response::Empty,
+        _ => Response::BadRequest,
     };
-
-    let response = response.unwrap_or_else(|error| {
-        log_internal_error(error);
-        Response::InternalServerError
-    });
 
     Ok(response)
 }

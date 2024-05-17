@@ -5,42 +5,45 @@ use http_server::response::Response;
 use http_server::request::Request;
 use crate::routing;
 use crate::routing::html;
+use crate::flow_controller::HttpResponseContextExtension;
 
-pub fn main() -> anyhow::Result<Response> {
-    Ok(Response::Redirect{location: "/chat".into(), headers: Vec::new()})
+pub fn main() -> Response {
+    Response::Redirect{location: "/chat".into(), headers: Vec::new()}
 }
 
 pub async fn chat<D: DataAccess, A, T: AsyncRead + Unpin>(
     request: &Request<T>,
     app: Messenger<D, A>,
     _chat_id: Option<&str>,
-) -> anyhow::Result<Response> {
+) -> Response {
 
     let headers = request.headers();
 
-    let user_id = match routing::get_authorization(headers)? {
+    let user_id = match routing::get_authorization(headers).or_server_error()? {
         Some(user_id) => user_id,
-        None => return Ok(routing::unauthorized_redirect()),
+        None => return routing::unauthorized_redirect(),
     };
 
-    let chat_page = html::chat_page(&app, &user_id).await?;
+    let chat_page = html::chat_page(&app, &user_id).await.or_server_error()?;
 
-    Ok(Response::Html {
+    Response::Html {
         content: chat_page,
         headers: Vec::new(),
-    })
+    }
 }
 
-pub async fn authorization() -> anyhow::Result<Response> {
-    let content = html::login_page()?;
-    Ok(Response::Html {
+pub async fn authorization() -> Response {
+    let content = html::login_page().or_server_error()?;
+
+    Response::Html {
         content,
         headers: Vec::new(),
-    })
+    }
 }
 
-pub async fn signup() -> anyhow::Result<Response> {
-    let content = html::signup_page()?;
+pub async fn signup() -> Response {
+    let content = html::signup_page().or_server_error()?;
     let headers = vec![];
-    Ok(Response::Html { content , headers })
+
+    Response::Html { content , headers }
 }
