@@ -78,8 +78,8 @@ mod tests {
             Err(Error::CustomMessage(msg)) => {
                 assert!(msg.starts_with("unknown field `field_3`"))
             }
-            Err(_) => assert!(false, "Incorrect error variant, expected CustomMessage"),
-            Ok(_) => assert!(false, "Didn't fail"),
+            Err(_) => panic!("Incorrect error variant, expected CustomMessage"),
+            Ok(_) => panic!("Didn't fail"),
         }
 
         let res: Result<TwoStringFieldsStrict, _> =
@@ -88,8 +88,8 @@ mod tests {
             Err(Error::CustomMessage(msg)) => {
                 assert!(msg.starts_with("unknown field `field_3`"))
             }
-            Err(_) => assert!(false, "Incorrect error variant, expected CustomMessage"),
-            Ok(_) => assert!(false, "Didn't fail"),
+            Err(_) => panic!("Incorrect error variant, expected CustomMessage"),
+            Ok(_) => panic!("Didn't fail"),
         }
     }
 
@@ -353,6 +353,6 @@ impl<'de> de::Deserializer<'de> for StringValue<'de> {
 
 fn decode(text: &str) -> String {
     let mut res = String::new();
-    url_escape::decode_to_string(text.replace("+", " "), &mut res);
+    url_escape::decode_to_string(text.replace('+', " "), &mut res);
     res
 }

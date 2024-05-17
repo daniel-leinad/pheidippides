@@ -78,7 +78,7 @@ impl Db {
 
         let mut username_id_map = HashMap::new();
         for (id, username) in users_vec.iter() {
-            username_id_map.insert(username.clone(), id.clone());
+            username_id_map.insert(username.clone(), *id);
         }
 
         let messages_vec = vec![
@@ -134,19 +134,19 @@ impl DataAccess for Db {
     type Error = Error;
 
     async fn fetch_users(&self) -> Result<Vec<(UserId, String)>, Error> {
-        Ok(self.users.lock()?.iter().map(|value| value.clone()).collect())
+        Ok(self.users.lock()?.iter().cloned().collect())
     }
 
     async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
         let mut table_locked = self.users.lock()?;
 
-        if table_locked.iter().filter(|record| record.1.to_lowercase() == username.to_lowercase()).next().is_some() {
+        if table_locked.iter().any(|record| record.1.to_lowercase() == username.to_lowercase()) {
             return Ok(None)
         };
 
         let user_id = uuid::Uuid::new_v4();
 
-        table_locked.push((user_id.clone(), username.to_owned()));
+        table_locked.push((user_id, username.to_owned()));
         Ok(Some(user_id))
     }
 
@@ -161,9 +161,9 @@ impl DataAccess for Db {
         };
         let res = self.messages.lock()?.iter().rev().filter_map(|msg_record| {
             if &msg_record.from == user_id {
-                Some(User::new::<Db>(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
+                Some(User::new::<Db>(msg_record.to, users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else if &msg_record.to == user_id {
-                Some(User::new::<Db>(msg_record.from.clone(), users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
+                Some(User::new::<Db>(msg_record.from, users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
             } else {
                 None
             }
@@ -258,7 +258,7 @@ impl AuthStorage for Db {
                 return Ok(Some(old_auth.into()))
             };
         };
-        table_locked.push(AuthRecord{ user_id: user_id.clone(), phc_string: auth_info.phc_string().clone() });
+        table_locked.push(AuthRecord{ user_id: *user_id, phc_string: auth_info.phc_string().clone() });
         Ok(None)
     }
 }

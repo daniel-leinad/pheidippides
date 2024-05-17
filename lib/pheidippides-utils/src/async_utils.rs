@@ -31,7 +31,7 @@ where
                         },
                     };
                     if let Some(message_out) = f(message_in){
-                        if let Err(_) = sender.send(message_out) {
+                        if sender.send(message_out).is_err() {
                             // receiver is dropped, drop sender
                             break
                         }
@@ -67,7 +67,7 @@ where
                         },
                     };
                     if let Some(message_out) = f(message_in) {
-                        if let Err(_) = sender.send(message_out) {
+                        if sender.send(message_out).is_err() {
                             // receiver is dropped, drop sender
                             break
                         }
@@ -96,7 +96,7 @@ pub fn redirect_unbounded_channel<T: 'static + Send>(mut from: UnboundedReceiver
                             break
                         },
                     };
-                    if let Err(_) = to.send(message) {
+                    if to.send(message).is_err() {
                         // receiver is dropped, drop sender
                         break
                     }

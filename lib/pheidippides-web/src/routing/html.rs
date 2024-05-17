@@ -42,7 +42,7 @@ struct SignUpPage {}
 struct LoginFailPage {}
 
 pub async fn chat_page<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<Option<String>> {
-    let user= app.fetch_user(&user_id).await?;
+    let user= app.fetch_user(user_id).await?;
 
     let username = match user {
         Some(user) => user.username,
@@ -85,7 +85,7 @@ pub async fn chats_html_response<A, T: AsyncRead + Unpin>(request: &Request<T>, 
 
 pub async fn chats_html<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<String> {
     let chats = app.fetch_users_chats(user_id).await?;
-    Ok(ChatHtmlElements{ chats }.render().context("Could not render elements/chats.html")?)
+    ChatHtmlElements{ chats }.render().context("Could not render elements/chats.html")
 }
 
 #[derive(Deserialize)]

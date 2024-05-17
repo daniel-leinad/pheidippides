@@ -28,7 +28,7 @@ pub async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, 
     writer.write_all(&http_response.into_bytes()).await?;
 
     if let Some(retry_value) = retry {
-        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
+        writer.write_all(format!("retry: {retry_value}\n").as_bytes()).await?;
     };
 
     writer.flush().await?;
@@ -72,7 +72,7 @@ async fn send_event_to_event_source_stream<T: AsyncWriteExt + Unpin>(writer: &mu
         response_str.push_str(&format!("data: {line}\n"))
     };
     response_str.push_str(&format!("id: {}\n", event.id));
-    response_str.push_str("\n");
+    response_str.push('\n');
 
     writer.write_all(response_str.as_bytes()).await?;
     writer.flush().await?;

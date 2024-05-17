@@ -34,7 +34,7 @@ pub fn update_session_info(session_id: SessionId, session_info: SessionInfo) -> 
 
 pub fn get_session_info(session_id: &SessionId) -> Result<Option<SessionInfo>> {
     let res = match SESSION_INFO.read() {
-        Ok(session_info_read_lock) => session_info_read_lock.get(session_id).map(|v| v.clone()),
+        Ok(session_info_read_lock) => session_info_read_lock.get(session_id).cloned(),
         Err(e) => {
             bail!("Could not lock SESSION_INFO global for read: {}", e)
         }

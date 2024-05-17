@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use http_server;
-
 #[tokio::test]
 async fn cannot_make_request_of_gibberish() {
     let reader = tokio_test::io::Builder::new()

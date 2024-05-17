@@ -25,7 +25,7 @@ pub fn logout<T: AsyncRead + Unpin>(request: &Request<T>) -> Response {
         None => return routing::unauthorized_redirect(),
     };
 
-    sessions::remove_session_info(&session_id).or_server_error()?;
+    sessions::remove_session_info(session_id).or_server_error()?;
 
     routing::unauthorized_redirect()
 }

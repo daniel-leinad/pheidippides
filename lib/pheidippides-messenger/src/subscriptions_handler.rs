@@ -86,7 +86,7 @@ impl<D: DataAccess> SubscriptionsHandler<D> {
         match starting_point {
             None => {
                 // no extra channel needed, simply convert broadcast to an unbounded channel
-                Ok(async_utils::pipe_broadcast(subscription, |v| Some(v)))
+                Ok(async_utils::pipe_broadcast(subscription, Some))
             },
             Some(starting_point) => {
                 let previous_messages = self.data_access.fetch_users_messages_since(&user_id, &starting_point).await?;

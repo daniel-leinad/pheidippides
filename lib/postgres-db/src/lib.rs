@@ -34,13 +34,12 @@ impl Db {
 
     pub fn graceful_shutdown(&self, cancellation_token: CancellationToken) -> impl Future<Output = Result<(), JoinError>> {
         let pool_cloned = self.pool.clone();
-        let res = tokio::spawn(async move {
+        tokio::spawn(async move {
             cancellation_token.cancelled().await;
             eprintln!("Shutting down database connection...");
             pool_cloned.close().await;
             eprintln!("Shutting down database connection...Success");
-        });
-        res
+        })
     }
 
     pub async fn check_migrations(&self) -> Result<()> {
@@ -355,7 +354,7 @@ fn temp_table_name(name: &str) -> String {
 }
 
 fn pg_id(input: &str) -> String {
-    format!("\"{}\"", input.replace("\"", "\"\""))
+    format!("\"{}\"", input.replace('\"', "\"\""))
 }
 
 #[cfg(test)]

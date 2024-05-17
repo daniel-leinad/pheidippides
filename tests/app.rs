@@ -3,7 +3,6 @@ use std::assert_matches::assert_matches;
 
 use pheidippides_messenger::Message;
 use pheidippides_messenger::messenger::Messenger;
-use mock_db;
 use mock_db::Db;
 use pheidippides_auth::AuthServiceUsingArgon2;
 
@@ -134,6 +133,6 @@ async fn authorization_ignores_case() {
 async fn make_app() -> Messenger<Db, AuthServiceUsingArgon2<Db>> {
     let db_access = Db::empty();
     let auth_service = AuthServiceUsingArgon2::new(db_access.clone());
-    let app = Messenger::new(db_access, auth_service);
-    app
+
+    Messenger::new(db_access, auth_service)
 }

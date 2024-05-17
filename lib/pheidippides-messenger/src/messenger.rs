@@ -38,7 +38,7 @@ impl<D: DataAccess, A> Messenger<D, A> {
     pub async fn fetch_users_chats(&self, user_id: &UserId) -> Result<Vec<User>> {
 
         let chats = self.data_access
-            .find_users_chats(&user_id).await
+            .find_users_chats(user_id).await
             .with_context(|| format!("Couldn't fetch chats for user {user_id}"))?;
 
         Ok(chats)

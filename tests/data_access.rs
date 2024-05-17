@@ -66,7 +66,7 @@ pub async fn fetches_last_messages(db_access: &impl DataAccess) {
     let mut timestamp = chrono::Utc::now();
 
     for (id, from, to, msg) in messages {
-        timestamp = timestamp + Duration::from_secs(1);
+        timestamp += Duration::from_secs(1);
         db_access.create_message(&Message {
             id,
             from,
@@ -131,7 +131,7 @@ pub async fn fetches_users_messages_since(db_access: &impl DataAccess) {
     let mut timestamp = chrono::Utc::now();
 
     for (id, from, to, msg) in messages {
-        timestamp = timestamp + Duration::from_secs(1);
+        timestamp += Duration::from_secs(1);
         db_access.create_message(&Message {
             id,
             from,

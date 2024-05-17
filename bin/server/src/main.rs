@@ -6,9 +6,6 @@ use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_web::request_handler;
 use pheidippides_auth::{AuthServiceUsingArgon2, AuthStorage};
 
-use mock_db;
-use postgres_db;
-
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]

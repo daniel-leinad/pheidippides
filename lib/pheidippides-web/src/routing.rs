@@ -41,7 +41,7 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
         .split('/')
         .filter(|s| !s.is_empty());
 
-    let method = request.method().clone();
+    let method = request.method();
     let query = (
         &method,
         path_segments.next(),
