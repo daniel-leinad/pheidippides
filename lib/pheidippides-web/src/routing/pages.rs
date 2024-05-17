@@ -24,7 +24,9 @@ pub async fn chat<D: DataAccess, A, T: AsyncRead + Unpin>(
         None => return routing::unauthorized_redirect(),
     };
 
-    let chat_page = html::chat_page(&app, &user_id).await.or_server_error()?;
+    let chat_page = html::chat_page(&app, &user_id).await
+        .or_server_error()?
+        .or_bad_request()?;
 
     Response::Html {
         content: chat_page,

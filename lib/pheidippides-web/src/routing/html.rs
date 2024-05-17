@@ -41,15 +41,23 @@ struct SignUpPage {}
 #[template(path = "login_fail.html")]
 struct LoginFailPage {}
 
-pub async fn chat_page<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<String> {
-    let username= app
-        .fetch_user(&user_id).await?
-        .with_context(|| format!("Incorrect user id: {user_id}"))? // TODO don't like the fact that this becomes a server error
-        .username;
-    
+pub async fn chat_page<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<Option<String>> {
+    let user= app.fetch_user(&user_id).await?;
+
+    let username = match user {
+        Some(user) => user.username,
+        None => return Ok(None),
+    };
+
     let users_chats = app.fetch_users_chats(user_id).await?;
 
-    ChatPage{ username: &username, user_id, chats: users_chats }.render().context("Could not render chat.html")
+    Ok(Some(
+        ChatPage{
+            user_id,
+            username: &username,
+            chats: users_chats
+        }.render().context("Could not render chat.html")?
+    ))
 }
 
 pub fn login_page() -> Result<String> {
