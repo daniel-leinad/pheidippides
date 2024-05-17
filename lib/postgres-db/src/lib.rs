@@ -10,10 +10,11 @@ use tokio_util::sync::CancellationToken;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{Executor, PgPool, query, Row};
 
-use pheidippides_messenger::{User, Message, MessageId, UserId};
+use pheidippides_messenger::{Message, MessageId, User, UserId};
 use pheidippides_messenger::data_access::{
-    AuthenticationInfo, DataAccess, MESSAGE_LOAD_BUF_SIZE
+    DataAccess, MESSAGE_LOAD_BUF_SIZE
 };
+use pheidippides_auth::{AuthenticationInfo, AuthStorage};
 
 pub const MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 const DB_VERSION: i64 = 2;
@@ -83,7 +84,7 @@ pub enum Error {
     #[error("Postgres error: {0}")]
     PgError(#[from] sqlx::Error),
     #[error("Auth info parsing error: {0}")]
-    AuthInfoParsingError(#[from] pheidippides_messenger::data_access::AuthenticationInfoParsingError),
+    AuthInfoParsingError(#[from] pheidippides_auth::AuthenticationInfoParsingError),
 }
 
 impl DataAccess for Db {
@@ -210,7 +211,7 @@ impl DataAccess for Db {
         Ok(res)
     }
 
-    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Self::Error> {
+    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> Result<Vec<Message>, Self::Error> {
         let mut conn = self.pool.acquire().await?;
         let mut query_builder = sqlx::QueryBuilder::new("");
         query_builder.push(r#"
@@ -300,6 +301,10 @@ impl DataAccess for Db {
             .await?;
         Ok(())
     }
+}
+
+impl AuthStorage for Db {
+    type Error = Error;
 
     async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Self::Error> {
         let res = self.pool.acquire().await?
@@ -321,8 +326,8 @@ impl DataAccess for Db {
         let mut transaction = self.pool.begin().await?;
         transaction.execute(query("lock table auth in exclusive mode")).await?;
         let old_auth = transaction.fetch_optional(query(
-                "select phc_string from auth where user_id = $1"
-            ).bind(user_id)).await?;
+            "select phc_string from auth where user_id = $1"
+        ).bind(user_id)).await?;
 
         match old_auth {
             Some(row) => {
@@ -349,7 +354,6 @@ fn temp_table_name(name: &str) -> String {
     pg_id(&format!("temp_{name}_{}", Uuid::new_v4()))
 }
 
-//TODO possibly use Cow for optimization
 fn pg_id(input: &str) -> String {
     format!("\"{}\"", input.replace("\"", "\"\""))
 }

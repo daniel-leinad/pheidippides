@@ -8,20 +8,22 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use tokio::io::AsyncRead;
+use pheidippides_messenger::authorization::AuthService;
 
-use web_server::{self, Request, Response};
+use http_server::{self};
+use http_server::request::Request;
+use http_server::response::Response;
 
-use pheidippides_utils::utils::{
-    CaseInsensitiveString, get_cookies_hashmap, log_internal_error
-};
+use pheidippides_utils::utils::CaseInsensitiveString;
 use pheidippides_messenger::UserId;
 use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::data_access::DataAccess;
+use pheidippides_utils::http::get_cookies_hashmap;
 
 use crate::request_handler::RequestHandlerError;
 use crate::sessions;
 
-pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess>) -> Result<Response, RequestHandlerError> {
+pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthService>) -> Result<Response, RequestHandlerError> {
 
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
@@ -48,7 +50,7 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
         path_segments.next(),
     );
 
-    use web_server::Method::*;
+    use http_server::method::Method::*;
     let response = match query {
         (Get, None, ..) => pages::main(),
         (Get, Some("login"), None, ..) => pages::authorization().await,
@@ -64,14 +66,9 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
         (Get, Some("html"), Some("chat"), Some(chat_id), ..) => html::chat_html_response(app, chat_id).await,
         (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
         (Get, Some("tools"), Some("event_source"), None, ..) => tools::event_source(request),
-        (Get, Some("favicon.ico"), None, ..) => Ok(Response::Empty),
-        _ => Ok(Response::BadRequest),
+        (Get, Some("favicon.ico"), None, ..) => Response::Empty,
+        _ => Response::BadRequest,
     };
-
-    let response = response.unwrap_or_else(|error| {
-        log_internal_error(error);
-        Response::InternalServerError
-    });
 
     Ok(response)
 }
@@ -88,11 +85,9 @@ fn unauthorized_redirect() -> Response {
     Response::Redirect{location: "/login".into(), headers: Vec::new()}
 }
 
-// TODO return 'static reference for optimisation?
 fn get_authorization(headers: &HashMap<CaseInsensitiveString, String>) -> Result<Option<UserId>> {
     let cookies = match get_cookies_hashmap(headers) {
         Ok(cookies) => cookies,
-        // TODO handle error
         Err(_) => return Ok(None),
     };
 

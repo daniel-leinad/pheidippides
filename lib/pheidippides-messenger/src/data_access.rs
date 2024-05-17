@@ -1,20 +1,9 @@
-use std::future::Future;
-use std::str::FromStr;
-
-use thiserror::Error;
-
-use crate::{User, Message, MessageId, UserId};
+use crate::{Message, MessageId, User, UserId};
 
 pub const MESSAGE_LOAD_BUF_SIZE: i32 = 50;
 
-// written as a macro to use Self::Error
-macro_rules! async_result {
-    ($t:ty) => {
-        impl Future<Output = Result<$t, Self::Error>> + Send
-    };
-}
+use pheidippides_utils::async_result;
 
-// TODO rewrite trait to accept references as much as possible
 pub trait DataAccess: 'static + Send + Sync + Clone {
     type Error: 'static + std::error::Error + Send + Sync;
 
@@ -63,51 +52,7 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
 
     fn find_users_chats(&self, user_id: &UserId) -> async_result!(Vec<User>);
 
-    fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> async_result!(Vec<Message>);
+    fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> async_result!(Vec<Message>);
     fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> async_result!(Vec<Message>);
     fn create_message(&self, message: &Message) -> async_result!(());
-
-    fn fetch_authentication(&self, user_id: &UserId) -> async_result!(Option<AuthenticationInfo>);
-    fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> async_result!(Option<AuthenticationInfo>);
-}
-
-
-// TODO auth logic does not belong here
-pub struct AuthenticationInfo {
-    phc_string: password_hash::PasswordHashString,
-}
-
-impl AuthenticationInfo {
-    pub fn phc_string(&self) -> &password_hash::PasswordHashString {
-        &self.phc_string
-    }
-}
-
-impl<'a> From<password_hash::PasswordHash<'a>> for AuthenticationInfo {
-    fn from(value: password_hash::PasswordHash<'a>) -> Self {
-        AuthenticationInfo { phc_string: value.into() }
-    }
-}
-
-impl From<password_hash::PasswordHashString> for AuthenticationInfo {
-    fn from(value: password_hash::PasswordHashString) -> Self {
-        AuthenticationInfo { phc_string: value }
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum AuthenticationInfoParsingError {
-    #[error("Incorrect phc string: {0}")]
-    IncorrectPHCString(String),
-}
-
-impl FromStr for AuthenticationInfo {
-    type Err = AuthenticationInfoParsingError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.parse() {
-            Ok(phc_string) => Ok(AuthenticationInfo{phc_string}),
-            Err(_) => Err(AuthenticationInfoParsingError::IncorrectPHCString(s.to_owned()))
-        }
-    }
 }

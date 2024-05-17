@@ -6,7 +6,8 @@ edition = "2021"
 [dependencies]
 pheidippides-messenger = {path= "../../lib/pheidippides-messenger" }
 pheidippides-web = {path= "../../lib/pheidippides-web" }
-web-server = {path = "../../lib/web-server"}
+pheidippides-auth = { path = "../../lib/pheidippides-auth" }
+http-server = {path = "../../lib/http-server" }
 postgres-db = {path = "../../lib/postgres-db" }
 mock-db = {path = "../../lib/mock-db" }
 

@@ -2,8 +2,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
-use pheidippides_messenger::data_access;
+use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_web::request_handler;
+use pheidippides_auth::{AuthServiceUsingArgon2, AuthStorage};
 
 use mock_db;
 use postgres_db;
@@ -48,9 +49,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_server(db_access: impl data_access::DataAccess, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
-    let request_handler = request_handler::RequestHandler::new(db_access.clone());
-    web_server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
+async fn run_server<T: DataAccess + AuthStorage>(data_access: T, addr: &str, cancellation_token: CancellationToken) -> Result<()> {
+    let auth_service = AuthServiceUsingArgon2::new(data_access.clone());
+    let request_handler = request_handler::RequestHandler::new(data_access, auth_service);
+    http_server::server::run_server(addr, request_handler, cancellation_token.clone()).await.with_context(|| format!("Unable to start server at {}", addr))?;
     Ok(())
 }
 

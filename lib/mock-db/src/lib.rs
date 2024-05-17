@@ -1,7 +1,10 @@
 use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
 
-use pheidippides_messenger::{authorization, User, Message, MessageId, UserId};
+use pheidippides_messenger::{Message, MessageId, User, UserId};
+use pheidippides_messenger::authorization::AuthService;
 use pheidippides_messenger::data_access::*;
+
+use pheidippides_auth::{AuthServiceUsingArgon2, AuthenticationInfo, AuthStorage};
 
 struct MessageRecord {
     id: MessageId,
@@ -54,6 +57,13 @@ pub struct Db {
 }
 
 impl Db {
+    pub fn empty() -> Self {
+        Self {
+            users: Arc::new(Mutex::new(vec![])),
+            messages: Arc::new(Mutex::new(vec![])),
+            auth: Arc::new(Mutex::new(vec![])),
+        }
+    }
     pub async fn new() -> Self {
         let mut users_vec = vec![
             (uuid::Uuid::new_v4(), "User1".into()),
@@ -106,13 +116,15 @@ impl Db {
         
         let res = Db { users, messages, auth };
 
+        let auth_service = AuthServiceUsingArgon2::new(res.clone());
+
         let credentials = [
             (username_id_map["User1"], "User1"),
             (username_id_map["User2"], "User2"),
         ];
 
         for (user_id, password) in credentials {
-            authorization::create_user(&user_id.to_owned(), password.to_owned(), &res).await.expect("Unable to create authentication while making mock db");
+            auth_service.create_user(&user_id.to_owned(), password.to_owned()).await.expect("Unable to create authentication while making mock db");
         };
         res
     }
@@ -164,11 +176,11 @@ impl DataAccess for Db {
         Ok(res)
     }
 
-    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<MessageId>) -> Result<Vec<Message>, Error> {
+    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> Result<Vec<Message>, Error> {
         let res = self.messages.lock()?.iter()
             .rev()
             .skip_while(|msg_record| match &starting_point {
-                Some(starting_id) => msg_record.id != *starting_id,
+                Some(starting_id) => msg_record.id != **starting_id,
                 None => false
             })
             .skip(if starting_point.is_some() {1} else {0})
@@ -219,6 +231,10 @@ impl DataAccess for Db {
         messages_lock.push(new_message);
         Ok(())
     }
+}
+
+impl AuthStorage for Db {
+    type Error = Error;
 
     async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
         let res = self.auth.lock()?

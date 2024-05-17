@@ -3,13 +3,15 @@ use serde::Deserialize;
 use askama::Template;
 use tokio::io::AsyncRead;
 
-use web_server::{Request, Response};
+use http_server::response::Response;
+use http_server::request::Request;
 
 use pheidippides_utils::serde::form_data as serde_form_data;
 
 use pheidippides_messenger::{User, UserId};
-use pheidippides_messenger::data_access::{self};
+use pheidippides_messenger::data_access::DataAccess;
 use pheidippides_messenger::messenger::Messenger;
+use crate::flow_controller::HttpResponseContextExtension;
 
 use crate::routing::get_authorization;
 
@@ -39,14 +41,23 @@ struct SignUpPage {}
 #[template(path = "login_fail.html")]
 struct LoginFailPage {}
 
-pub async fn chat_page(app: &Messenger<impl data_access::DataAccess>, user_id: &UserId) -> Result<String> {
-    let username = app
-         .fetch_username(&user_id).await?
-         .with_context(|| format!("Incorrect user id: {user_id}"))?;
-    
+pub async fn chat_page<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<Option<String>> {
+    let user= app.fetch_user(&user_id).await?;
+
+    let username = match user {
+        Some(user) => user.username,
+        None => return Ok(None),
+    };
+
     let users_chats = app.fetch_users_chats(user_id).await?;
 
-    ChatPage{ username: &username, user_id, chats: users_chats }.render().context("Could not render chat.html")
+    Ok(Some(
+        ChatPage{
+            user_id,
+            username: &username,
+            chats: users_chats
+        }.render().context("Could not render chat.html")?
+    ))
 }
 
 pub fn login_page() -> Result<String> {
@@ -61,17 +72,18 @@ pub fn login_fail_page() -> Result<String> {
     LoginFailPage{}.render().context("Could not render login_fail.html")
 }
 
-pub async fn chats_html_response<T: AsyncRead + Unpin>(request: &Request<T>, app: Messenger<impl data_access::DataAccess>) -> Result<Response> {
+pub async fn chats_html_response<A, T: AsyncRead + Unpin>(request: &Request<T>, app: Messenger<impl DataAccess, A>) -> Response {
     let headers = request.headers();
-    let authorization = get_authorization(headers)?;
+    let authorization = get_authorization(headers).or_bad_request()?;
     let response_string = match authorization {
-        Some(user_id) => chats_html(&app, &user_id).await?,
+        Some(user_id) => chats_html(&app, &user_id).await.or_server_error()?,
         None => String::from("Unauthorized"),
     };
-    Ok(Response::Html{content: response_string, headers: vec![]})
+
+    Response::Html{content: response_string, headers: vec![]}
 }
 
-pub async fn chats_html(app: &Messenger<impl data_access::DataAccess>, user_id: &UserId) -> Result<String> {
+pub async fn chats_html<A>(app: &Messenger<impl DataAccess, A>, user_id: &UserId) -> Result<String> {
     let chats = app.fetch_users_chats(user_id).await?;
     Ok(ChatHtmlElements{ chats }.render().context("Could not render elements/chats.html")?)
 }
@@ -81,32 +93,26 @@ struct ChatSearchParams {
     query: String,
 }
 
-pub async fn chatsearch_html(app: Messenger<impl data_access::DataAccess>, params: &str) -> Result<Response> {
+pub async fn chatsearch_html<A>(app: Messenger<impl DataAccess, A>, params: &str) -> Response {
 
-    let search_params: ChatSearchParams = match serde_form_data::from_str(params) {
-        Ok(res) => res,
-        Err(_) => return Ok(Response::Empty),
-    };
+    // TODO check authorization
 
-    let chats = app.find_users_by_substring(&search_params.query).await?;
+    let search_params: ChatSearchParams = serde_form_data::from_str(params).or_bad_request()?;
 
-    let chats_html = ChatHtmlElements{chats}.render()?;
+    let chats = app.find_users_by_substring(&search_params.query).await.or_server_error()?;
 
-    Ok(Response::Html{content: chats_html, headers: vec![]})
+    let chats_html = ChatHtmlElements{chats}.render().or_server_error()?;
+
+    Response::Html{content: chats_html, headers: vec![]}
 
 }
 
-pub async fn chat_html_response(app: Messenger<impl data_access::DataAccess>, chat_id: &str) -> Result<Response> {
+pub async fn chat_html_response<A>(app: Messenger<impl DataAccess, A>, chat_id: &str) -> Response {
     // TODO authorization first??
     
-    let chat_id: UserId = match chat_id.parse() {
-        Ok(res) => res,
-        Err(_) => return Ok(Response::BadRequest),
-    };
+    let chat_id: UserId = chat_id.parse().or_bad_request()?;
+    let chat_info = app.fetch_user(&chat_id).await.or_server_error()?;
+    let res = ChatHtmlElements{chats: chat_info.into_iter().collect()}.render().or_server_error()?;
 
-    let chat_info = app.fetch_user(&chat_id).await?;
-
-    let res = ChatHtmlElements{chats: chat_info.into_iter().collect()}.render()?;
-
-    Ok(Response::Html { content: res, headers: vec![] })
+    Response::Html { content: res, headers: vec![] }
 }

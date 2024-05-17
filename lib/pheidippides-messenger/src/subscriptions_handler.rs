@@ -12,54 +12,18 @@ use crate::{Message, MessageId, UserId};
 const SUBSCRIPTIONS_CLEANUP_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
-pub struct SubscriptionsHandler<D: DataAccess> {
+pub struct SubscriptionsHandler<D> {
     data_access: D,
     new_messages: Arc<RwLock<HashMap<UserId, Sender<Message>>>>,
 }
 
-impl<D: DataAccess> SubscriptionsHandler<D> {
+impl<D> SubscriptionsHandler<D> {
     pub fn new(data_access: D) -> Self {
         let new_messages_subscriptions: Arc<RwLock<HashMap<UserId, Sender<Message>>>>  = Arc::new(RwLock::new(HashMap::new()));
 
         Self::spawn_cleanup_job(new_messages_subscriptions.clone());
 
         SubscriptionsHandler { data_access, new_messages: new_messages_subscriptions }
-    }
-
-    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> anyhow::Result<mpsc::UnboundedReceiver<Message>> {
-        let subscription = {
-            // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-            let mut subscriptions_lock = match self.new_messages.write() {
-                Ok(res) => res,
-                Err(e) => bail!("Could not lock new_messages_subscriptions for write: {e}"),
-            };
-
-            subscriptions_lock.entry(user_id).or_insert(tokio::sync::broadcast::channel(100).0).subscribe()
-        };
-
-        match starting_point {
-            None => {
-                // no extra channel needed, simply convert broadcast to an unbounded channel
-                Ok(async_utils::pipe_broadcast(subscription, |v| Some(v)))
-            },
-            Some(starting_point) => {
-                let previous_messages = self.data_access.fetch_users_messages_since(&user_id, &starting_point).await?;
-                let (sender, receiver) = mpsc::unbounded_channel();
-
-                let mut sent_messages = HashSet::new();
-                for message in previous_messages {
-                    sent_messages.insert(message.id);
-                    sender.send(message)?; // Receiver can't be dropped at this point, if .send() returns an error, propagate it back for debugging
-                };
-
-                let subscription_filtered = async_utils::pipe_broadcast(subscription, move |message| {
-                    if sent_messages.contains(&message.id) {None} else {Some(message)}
-                });
-
-                async_utils::redirect_unbounded_channel(subscription_filtered, sender);
-                Ok(receiver)
-            },
-        }
     }
 
     pub fn handle_new_message(&self, message: &Message) -> anyhow::Result<()> {
@@ -103,6 +67,44 @@ impl<D: DataAccess> SubscriptionsHandler<D> {
         match sender.send(event.clone()) {
             Ok(_) => Ok(()),
             Err(e) => bail!("{e}")
+        }
+    }
+}
+
+impl<D: DataAccess> SubscriptionsHandler<D> {
+    pub async fn subscribe_new_messages(&self, user_id: UserId, starting_point: Option<MessageId>) -> anyhow::Result<mpsc::UnboundedReceiver<Message>> {
+        let subscription = {
+            // let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+            let mut subscriptions_lock = match self.new_messages.write() {
+                Ok(res) => res,
+                Err(e) => bail!("Could not lock new_messages_subscriptions for write: {e}"),
+            };
+
+            subscriptions_lock.entry(user_id).or_insert(tokio::sync::broadcast::channel(100).0).subscribe()
+        };
+
+        match starting_point {
+            None => {
+                // no extra channel needed, simply convert broadcast to an unbounded channel
+                Ok(async_utils::pipe_broadcast(subscription, |v| Some(v)))
+            },
+            Some(starting_point) => {
+                let previous_messages = self.data_access.fetch_users_messages_since(&user_id, &starting_point).await?;
+                let (sender, receiver) = mpsc::unbounded_channel();
+
+                let mut sent_messages = HashSet::new();
+                for message in previous_messages {
+                    sent_messages.insert(message.id);
+                    sender.send(message)?; // Receiver can't be dropped at this point, if .send() returns an error, propagate it back for debugging
+                };
+
+                let subscription_filtered = async_utils::pipe_broadcast(subscription, move |message| {
+                    if sent_messages.contains(&message.id) {None} else {Some(message)}
+                });
+
+                async_utils::redirect_unbounded_channel(subscription_filtered, sender);
+                Ok(receiver)
+            },
         }
     }
 }
