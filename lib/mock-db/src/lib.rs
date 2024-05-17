@@ -1,10 +1,13 @@
-use std::{collections::HashMap, sync::{Arc, Mutex, PoisonError}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, PoisonError},
+};
 
-use pheidippides_messenger::{Message, MessageId, User, UserId};
 use pheidippides_messenger::authorization::AuthService;
 use pheidippides_messenger::data_access::*;
+use pheidippides_messenger::{Message, MessageId, User, UserId};
 
-use pheidippides_auth::{AuthServiceUsingArgon2, AuthenticationInfo, AuthStorage};
+use pheidippides_auth::{AuthServiceUsingArgon2, AuthStorage, AuthenticationInfo};
 
 struct MessageRecord {
     id: MessageId,
@@ -19,7 +22,13 @@ impl MessageRecord {
         let id = uuid::Uuid::new_v4();
         let message = message.into();
         let timestamp = chrono::Utc::now();
-        MessageRecord { id , from, to, message, timestamp }
+        MessageRecord {
+            id,
+            from,
+            to,
+            message,
+            timestamp,
+        }
     }
 }
 
@@ -74,11 +83,11 @@ impl Db {
 
         for i in 5..100 {
             users_vec.push((uuid::Uuid::new_v4(), format!("User {i}")))
-        };
+        }
 
         let mut username_id_map = HashMap::new();
         for (id, username) in users_vec.iter() {
-            username_id_map.insert(username.clone(), id.clone());
+            username_id_map.insert(username.clone(), *id);
         }
 
         let messages_vec = vec![
@@ -95,26 +104,42 @@ impl Db {
         let mut messages_vec = {
             let mut res = vec![];
             for (from, to, msg) in messages_vec {
-                res.push(MessageRecord::new(username_id_map[from], username_id_map[to], msg));
+                res.push(MessageRecord::new(
+                    username_id_map[from],
+                    username_id_map[to],
+                    msg,
+                ));
             }
             res
         };
 
         for i in 0..100 {
             // messages_vec.push(MessageRecord { from: "4".into(), to: "1".into(), message: format!("Привет! ({i})") })
-            messages_vec.push(MessageRecord::new(username_id_map["Пользователь1"], username_id_map["User1"], &format!("Привет! ({i})")));
-        };
+            messages_vec.push(MessageRecord::new(
+                username_id_map["Пользователь1"],
+                username_id_map["User1"],
+                &format!("Привет! ({i})"),
+            ));
+        }
 
         for (user_id, _) in users_vec.iter().skip(4) {
             // messages_vec.push(MessageRecord { from: user_id.clone(), to: "1".into(), message: "Привет".into() })
-            messages_vec.push(MessageRecord::new(*user_id, username_id_map["User1"], "Привет"));
-        };
+            messages_vec.push(MessageRecord::new(
+                *user_id,
+                username_id_map["User1"],
+                "Привет",
+            ));
+        }
 
         let users = Arc::new(Mutex::new(users_vec));
         let messages = Arc::new(Mutex::new(messages_vec));
         let auth = Arc::new(Mutex::new(vec![]));
-        
-        let res = Db { users, messages, auth };
+
+        let res = Db {
+            users,
+            messages,
+            auth,
+        };
 
         let auth_service = AuthServiceUsingArgon2::new(res.clone());
 
@@ -124,8 +149,11 @@ impl Db {
         ];
 
         for (user_id, password) in credentials {
-            auth_service.create_user(&user_id.to_owned(), password.to_owned()).await.expect("Unable to create authentication while making mock db");
-        };
+            auth_service
+                .create_user(&user_id.to_owned(), password.to_owned())
+                .await
+                .expect("Unable to create authentication while making mock db");
+        }
         res
     }
 }
@@ -134,19 +162,22 @@ impl DataAccess for Db {
     type Error = Error;
 
     async fn fetch_users(&self) -> Result<Vec<(UserId, String)>, Error> {
-        Ok(self.users.lock()?.iter().map(|value| value.clone()).collect())
+        Ok(self.users.lock()?.iter().cloned().collect())
     }
 
     async fn create_user(&self, username: &str) -> Result<Option<UserId>, Self::Error> {
         let mut table_locked = self.users.lock()?;
 
-        if table_locked.iter().filter(|record| record.1.to_lowercase() == username.to_lowercase()).next().is_some() {
-            return Ok(None)
+        if table_locked
+            .iter()
+            .any(|record| record.1.to_lowercase() == username.to_lowercase())
+        {
+            return Ok(None);
         };
 
         let user_id = uuid::Uuid::new_v4();
 
-        table_locked.push((user_id.clone(), username.to_owned()));
+        table_locked.push((user_id, username.to_owned()));
         Ok(Some(user_id))
     }
 
@@ -156,38 +187,71 @@ impl DataAccess for Db {
             let mut res = HashMap::new();
             for (user_id, username) in users {
                 res.insert(user_id, username);
-            };
+            }
             res
         };
-        let res = self.messages.lock()?.iter().rev().filter_map(|msg_record| {
-            if &msg_record.from == user_id {
-                Some(User::new::<Db>(msg_record.to.clone(), users.get(&msg_record.to).unwrap_or(&"<unknown user id>".to_owned()).clone()))
-            } else if &msg_record.to == user_id {
-                Some(User::new::<Db>(msg_record.from.clone(), users.get(&msg_record.from).unwrap_or(&"<unknown user id>".to_owned()).clone()))
-            } else {
-                None
-            }
-        }).fold(Vec::new(), |mut state, chat_info| {
-            if !state.contains(&chat_info) {
-                state.push(chat_info)
-            }
-            state
-        });
+        let res = self
+            .messages
+            .lock()?
+            .iter()
+            .rev()
+            .filter_map(|msg_record| {
+                if &msg_record.from == user_id {
+                    Some(User::new::<Db>(
+                        msg_record.to,
+                        users
+                            .get(&msg_record.to)
+                            .unwrap_or(&"<unknown user id>".to_owned())
+                            .clone(),
+                    ))
+                } else if &msg_record.to == user_id {
+                    Some(User::new::<Db>(
+                        msg_record.from,
+                        users
+                            .get(&msg_record.from)
+                            .unwrap_or(&"<unknown user id>".to_owned())
+                            .clone(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .fold(Vec::new(), |mut state, chat_info| {
+                if !state.contains(&chat_info) {
+                    state.push(chat_info)
+                }
+                state
+            });
         Ok(res)
     }
 
-    async fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> Result<Vec<Message>, Error> {
-        let res = self.messages.lock()?.iter()
+    async fn fetch_last_messages_in_chat(
+        &self,
+        user_id_1: &UserId,
+        user_id_2: &UserId,
+        starting_point: Option<&MessageId>,
+    ) -> Result<Vec<Message>, Error> {
+        let res = self
+            .messages
+            .lock()?
+            .iter()
             .rev()
             .skip_while(|msg_record| match &starting_point {
                 Some(starting_id) => msg_record.id != **starting_id,
-                None => false
+                None => false,
             })
-            .skip(if starting_point.is_some() {1} else {0})
+            .skip(if starting_point.is_some() { 1 } else { 0 })
             .filter_map(|msg_record| {
                 if (&msg_record.from == user_id_1 && &msg_record.to == user_id_2)
-                    || (&msg_record.from == user_id_2 && &msg_record.to == user_id_1) {
-                    Some(Message { id: msg_record.id, from: msg_record.from, to: msg_record.to, message: msg_record.message.to_owned(), timestamp: msg_record.timestamp })
+                    || (&msg_record.from == user_id_2 && &msg_record.to == user_id_1)
+                {
+                    Some(Message {
+                        id: msg_record.id,
+                        from: msg_record.from,
+                        to: msg_record.to,
+                        message: msg_record.message.to_owned(),
+                        timestamp: msg_record.timestamp,
+                    })
                 } else {
                     None
                 }
@@ -198,8 +262,14 @@ impl DataAccess for Db {
         Ok(res)
     }
 
-    async fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> Result<Vec<Message>, Self::Error> {
-        let res = self.messages.lock()?
+    async fn fetch_users_messages_since(
+        &self,
+        user_id: &UserId,
+        starting_point: &MessageId,
+    ) -> Result<Vec<Message>, Self::Error> {
+        let res = self
+            .messages
+            .lock()?
             .iter()
             .skip_while(|message_record| message_record.id != *starting_point)
             .skip(1)
@@ -210,7 +280,13 @@ impl DataAccess for Db {
                 let message = message_record.message.clone();
                 let timestamp = message_record.timestamp;
                 if from == *user_id || to == *user_id {
-                    Some(Message { id, from, to, message, timestamp })
+                    Some(Message {
+                        id,
+                        from,
+                        to,
+                        message,
+                        timestamp,
+                    })
                 } else {
                     None
                 }
@@ -236,29 +312,42 @@ impl DataAccess for Db {
 impl AuthStorage for Db {
     type Error = Error;
 
-    async fn fetch_authentication(&self, user_id: &UserId) -> Result<Option<AuthenticationInfo>, Error> {
-        let res = self.auth.lock()?
+    async fn fetch_authentication(
+        &self,
+        user_id: &UserId,
+    ) -> Result<Option<AuthenticationInfo>, Error> {
+        let res = self
+            .auth
+            .lock()?
             .iter()
-            .filter_map(|record|
+            .filter_map(|record| {
                 if record.user_id == *user_id {
                     Some(AuthenticationInfo::from(record.phc_string.clone()))
                 } else {
                     None
-                })
+                }
+            })
             .next();
         Ok(res)
     }
 
-    async fn update_authentication(&self, user_id: &UserId, auth_info: AuthenticationInfo) -> Result<Option<AuthenticationInfo>, Self::Error> {
+    async fn update_authentication(
+        &self,
+        user_id: &UserId,
+        auth_info: AuthenticationInfo,
+    ) -> Result<Option<AuthenticationInfo>, Self::Error> {
         let mut table_locked = self.auth.lock()?;
         for record in table_locked.iter_mut() {
             if record.user_id == *user_id {
                 let old_auth = record.phc_string.clone();
                 record.phc_string = auth_info.phc_string().clone();
-                return Ok(Some(old_auth.into()))
+                return Ok(Some(old_auth.into()));
             };
-        };
-        table_locked.push(AuthRecord{ user_id: user_id.clone(), phc_string: auth_info.phc_string().clone() });
+        }
+        table_locked.push(AuthRecord {
+            user_id: *user_id,
+            phc_string: auth_info.phc_string().clone(),
+        });
         Ok(None)
     }
 }

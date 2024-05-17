@@ -40,7 +40,7 @@ impl FromStr for Method {
             "options" => Ok(Self::Options),
             "trace" => Ok(Self::Trace),
             "connect" => Ok(Self::Connect),
-            _ => Err(MethodParseError::IncorrectMethod)
+            _ => Err(MethodParseError::IncorrectMethod),
         }
     }
 }

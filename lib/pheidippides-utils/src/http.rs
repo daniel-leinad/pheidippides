@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::utils::CaseInsensitiveString;
+use std::collections::HashMap;
 
 pub type Header = (CaseInsensitiveString, String);
 

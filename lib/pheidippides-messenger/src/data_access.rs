@@ -10,16 +10,19 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
     fn fetch_users(&self) -> async_result!(Vec<(UserId, String)>);
     fn fetch_user(&self, user_id: &UserId) -> async_result!(Option<User>) {
         async move {
-            let chat_info = self.fetch_users().await?
-                .into_iter().filter_map(|(id, username)| {
-                if &id == user_id {
-                    let id = id.to_owned();
-                    let username = username.to_owned();
-                    Some(User { username, id })
-                } else {
-                    None
-                }
-            })
+            let chat_info = self
+                .fetch_users()
+                .await?
+                .into_iter()
+                .filter_map(|(id, username)| {
+                    if &id == user_id {
+                        let id = id.to_owned();
+                        let username = username.to_owned();
+                        Some(User { username, id })
+                    } else {
+                        None
+                    }
+                })
                 .next();
             Ok(chat_info)
         }
@@ -27,9 +30,16 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
     fn find_user_by_username(&self, requested_username: &str) -> async_result!(Option<UserId>) {
         async move {
             let res = self
-                .fetch_users().await?
+                .fetch_users()
+                .await?
                 .into_iter()
-                .filter_map(|(id, username)| {if username.to_lowercase() == requested_username.to_lowercase() {Some(id)} else {None}})
+                .filter_map(|(id, username)| {
+                    if username.to_lowercase() == requested_username.to_lowercase() {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                })
                 .next();
             Ok(res)
         }
@@ -38,13 +48,18 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
     fn find_users_by_substring(&self, substring: &str) -> async_result!(Vec<User>) {
         async {
             let search_query = substring.to_lowercase();
-            let res = self.fetch_users().await?.into_iter().filter_map(|(user_id, username)| {
-                if username.to_lowercase().contains(&search_query) {
-                    Some(User::new::<Self>(user_id, username))
-                } else {
-                    None
-                }
-            }).collect();
+            let res = self
+                .fetch_users()
+                .await?
+                .into_iter()
+                .filter_map(|(user_id, username)| {
+                    if username.to_lowercase().contains(&search_query) {
+                        Some(User::new::<Self>(user_id, username))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
             Ok(res)
         }
     }
@@ -52,7 +67,16 @@ pub trait DataAccess: 'static + Send + Sync + Clone {
 
     fn find_users_chats(&self, user_id: &UserId) -> async_result!(Vec<User>);
 
-    fn fetch_last_messages_in_chat(&self, user_id_1: &UserId, user_id_2: &UserId, starting_point: Option<&MessageId>) -> async_result!(Vec<Message>);
-    fn fetch_users_messages_since(&self, user_id: &UserId, starting_point: &MessageId) -> async_result!(Vec<Message>);
+    fn fetch_last_messages_in_chat(
+        &self,
+        user_id_1: &UserId,
+        user_id_2: &UserId,
+        starting_point: Option<&MessageId>,
+    ) -> async_result!(Vec<Message>);
+    fn fetch_users_messages_since(
+        &self,
+        user_id: &UserId,
+        starting_point: &MessageId,
+    ) -> async_result!(Vec<Message>);
     fn create_message(&self, message: &Message) -> async_result!(());
 }

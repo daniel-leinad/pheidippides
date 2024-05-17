@@ -1,9 +1,9 @@
-use std::time::Duration;
 use anyhow::Context;
+use std::time::Duration;
 
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::io::{AsyncWriteExt, AsyncBufReadExt, BufReader, BufWriter};
 
 use crate::http_response::HttpResponseBuilder;
 
@@ -16,10 +16,12 @@ pub struct EventSourceEvent {
     pub event: Option<String>,
 }
 
-pub async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, event_stream: &mut UnboundedReceiver<EventSourceEvent>) -> anyhow::Result<()> {
-    let http_response = HttpResponseBuilder::new()
-        .content_event_stream()
-        .build();
+pub async fn handle_event_stream(
+    mut tcp_stream: TcpStream,
+    retry: Option<i32>,
+    event_stream: &mut UnboundedReceiver<EventSourceEvent>,
+) -> anyhow::Result<()> {
+    let http_response = HttpResponseBuilder::new().content_event_stream().build();
 
     let (reader, writer) = tcp_stream.split();
     let mut reader = BufReader::new(reader);
@@ -28,7 +30,9 @@ pub async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, 
     writer.write_all(&http_response.into_bytes()).await?;
 
     if let Some(retry_value) = retry {
-        writer.write_all(&format!("retry: {retry_value}\n").as_bytes()).await?;
+        writer
+            .write_all(format!("retry: {retry_value}\n").as_bytes())
+            .await?;
     };
 
     writer.flush().await?;
@@ -57,22 +61,24 @@ pub async fn handle_event_stream(mut tcp_stream: TcpStream, retry: Option<i32>, 
                 }
             },
         }
-
     }
 
     Ok(())
 }
 
-async fn send_event_to_event_source_stream<T: AsyncWriteExt + Unpin>(writer: &mut BufWriter<T>, event: EventSourceEvent) -> anyhow::Result<()> {
+async fn send_event_to_event_source_stream<T: AsyncWriteExt + Unpin>(
+    writer: &mut BufWriter<T>,
+    event: EventSourceEvent,
+) -> anyhow::Result<()> {
     let mut response_str = String::new();
     if let Some(event_type) = event.event {
         response_str.push_str(&format!("event: {}\n", event_type));
     }
     for line in event.data.lines() {
         response_str.push_str(&format!("data: {line}\n"))
-    };
+    }
     response_str.push_str(&format!("id: {}\n", event.id));
-    response_str.push_str("\n");
+    response_str.push('\n');
 
     writer.write_all(response_str.as_bytes()).await?;
     writer.flush().await?;

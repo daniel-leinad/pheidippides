@@ -1,30 +1,32 @@
+mod actions;
 mod html;
 mod json;
-mod tools;
 mod pages;
-mod actions;
+mod tools;
 
 use std::collections::HashMap;
 
 use anyhow::Result;
-use tokio::io::AsyncRead;
 use pheidippides_messenger::authorization::AuthService;
+use tokio::io::AsyncRead;
 
-use http_server::{self};
 use http_server::request::Request;
 use http_server::response::Response;
+use http_server::{self};
 
-use pheidippides_utils::utils::CaseInsensitiveString;
-use pheidippides_messenger::UserId;
-use pheidippides_messenger::messenger::Messenger;
 use pheidippides_messenger::data_access::DataAccess;
+use pheidippides_messenger::messenger::Messenger;
+use pheidippides_messenger::UserId;
 use pheidippides_utils::http::get_cookies_hashmap;
+use pheidippides_utils::utils::CaseInsensitiveString;
 
 use crate::request_handler::RequestHandlerError;
 use crate::sessions;
 
-pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenger<impl DataAccess, impl AuthService>) -> Result<Response, RequestHandlerError> {
-
+pub async fn route<T: AsyncRead + Unpin>(
+    request: &mut Request<T>,
+    app: Messenger<impl DataAccess, impl AuthService>,
+) -> Result<Response, RequestHandlerError> {
     let url = request.url();
     let (path, params_anchor) = match url.split_once('?') {
         Some(res) => res,
@@ -37,11 +39,9 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
         None => (params_anchor, ""),
     };
 
-    let mut path_segments = path
-        .split('/')
-        .filter(|s| !s.is_empty());
+    let mut path_segments = path.split('/').filter(|s| !s.is_empty());
 
-    let method = request.method().clone();
+    let method = request.method();
     let query = (
         &method,
         path_segments.next(),
@@ -59,12 +59,24 @@ pub async fn route<T: AsyncRead + Unpin>(request: &mut Request<T>, app: Messenge
         (Post, Some("signup"), None, ..) => actions::signup(request, app).await,
         (Get, Some("logout"), None, ..) => actions::logout(request),
         (Post, Some("authorize"), None, ..) => actions::authorize(request, app).await,
-        (Post, Some("message"), Some(receiver), None, ..) => actions::send_message(request, app, receiver).await,
-        (Get, Some("subscribe"), Some("new_messages"), None, ..) => actions::subscribe_new_messages(request, app, params).await,
-        (Get, Some("html"), Some("chats"), None, ..) => html::chats_html_response(request, app).await,
-        (Get, Some("html"), Some("chatsearch"), None, ..) => html::chatsearch_html(app, params).await,
-        (Get, Some("html"), Some("chat"), Some(chat_id), ..) => html::chat_html_response(app, chat_id).await,
-        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => json::messages_json(request, app, chat_id, params).await,
+        (Post, Some("message"), Some(receiver), None, ..) => {
+            actions::send_message(request, app, receiver).await
+        }
+        (Get, Some("subscribe"), Some("new_messages"), None, ..) => {
+            actions::subscribe_new_messages(request, app, params).await
+        }
+        (Get, Some("html"), Some("chats"), None, ..) => {
+            html::chats_html_response(request, app).await
+        }
+        (Get, Some("html"), Some("chatsearch"), None, ..) => {
+            html::chatsearch_html(app, params).await
+        }
+        (Get, Some("html"), Some("chat"), Some(chat_id), ..) => {
+            html::chat_html_response(app, chat_id).await
+        }
+        (Get, Some("json"), Some("messages"), Some(chat_id), None, ..) => {
+            json::messages_json(request, app, chat_id, params).await
+        }
         (Get, Some("tools"), Some("event_source"), None, ..) => tools::event_source(request),
         (Get, Some("favicon.ico"), None, ..) => Response::Empty,
         _ => Response::BadRequest,
@@ -82,7 +94,10 @@ fn failed_login_response() -> Result<Response> {
 }
 
 fn unauthorized_redirect() -> Response {
-    Response::Redirect{location: "/login".into(), headers: Vec::new()}
+    Response::Redirect {
+        location: "/login".into(),
+        headers: Vec::new(),
+    }
 }
 
 fn get_authorization(headers: &HashMap<CaseInsensitiveString, String>) -> Result<Option<UserId>> {

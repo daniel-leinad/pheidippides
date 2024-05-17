@@ -1,5 +1,5 @@
-use std::sync::RwLock;
 use std::collections::HashMap;
+use std::sync::RwLock;
 
 use anyhow::{bail, Result};
 use once_cell::sync::Lazy;
@@ -9,7 +9,8 @@ use pheidippides_messenger::UserId;
 pub type SessionId = String;
 
 pub const SESSION_ID_COOKIE: &str = "_pheidippides_sid";
-pub static SESSION_INFO: Lazy<RwLock<HashMap<SessionId, SessionInfo>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+pub static SESSION_INFO: Lazy<RwLock<HashMap<SessionId, SessionInfo>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Clone)]
 pub struct SessionInfo {
@@ -34,7 +35,7 @@ pub fn update_session_info(session_id: SessionId, session_info: SessionInfo) -> 
 
 pub fn get_session_info(session_id: &SessionId) -> Result<Option<SessionInfo>> {
     let res = match SESSION_INFO.read() {
-        Ok(session_info_read_lock) => session_info_read_lock.get(session_id).map(|v| v.clone()),
+        Ok(session_info_read_lock) => session_info_read_lock.get(session_id).cloned(),
         Err(e) => {
             bail!("Could not lock SESSION_INFO global for read: {}", e)
         }
@@ -46,7 +47,7 @@ pub fn remove_session_info(session_id: &SessionId) -> Result<()> {
     match SESSION_INFO.write() {
         Ok(mut session_info_write_lock) => {
             session_info_write_lock.remove(session_id);
-        },
+        }
         Err(e) => bail!("Could not lock SESSION_INFO global for write: {}", e),
     }
     Ok(())

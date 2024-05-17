@@ -1,9 +1,7 @@
-use http_server;
-use pheidippides_web::routing;
-use mock_db;
 use mock_db::Db;
 use pheidippides_auth::AuthServiceUsingArgon2;
 use pheidippides_messenger::messenger::Messenger;
+use pheidippides_web::routing;
 
 #[tokio::test]
 async fn returns_bad_request_for_wrong_url() {
@@ -13,16 +11,17 @@ async fn returns_bad_request_for_wrong_url() {
         .read(b"GET /random_url/aaa/bbbbb HTTP/1.1\r\n")
         .read(b"\r\n")
         .build();
-    let mut request = http_server::request::Request::try_from_stream(reader).await.unwrap();
+    let mut request = http_server::request::Request::try_from_stream(reader)
+        .await
+        .unwrap();
 
     let response = routing::route(&mut request, app).await.unwrap();
-    let is_bad_request = if let http_server::response::Response::BadRequest = response {true} else {false};
-    assert!(is_bad_request);
+    assert!(response.is_bad_request());
 }
 
 async fn make_app() -> Messenger<Db, AuthServiceUsingArgon2<Db>> {
     let db_access = mock_db::Db::new().await;
     let auth_service = AuthServiceUsingArgon2::new(db_access.clone());
-    let app = Messenger::new(db_access, auth_service);
-    app
+
+    Messenger::new(db_access, auth_service)
 }
